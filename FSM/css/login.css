@@ -1,0 +1,71 @@
+/* Add your custom CSS styles here */
+
+/* Background image for the whole page */
+body {
+    background-image: url('login1.jpg'); /* Replace with your movie-themed background image */
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-position: center;
+    font-family: Arial, sans-serif; /* Use an appropriate font */
+    margin: 0;
+    padding: 0;
+}
+
+/* Center the card vertically and horizontally */
+.container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+}
+
+/* Style the card */
+.card {
+    max-width: 400px;
+    background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent background color */
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    color: #fff;
+    text-align: center;
+}
+
+/* Style the card header */
+.card-header {
+    background-color: #f39c12; /* Movie-themed color */
+    color: #fff;
+    text-align: center;
+    padding: 10px 0;
+    border-radius: 8px 8px 0 0;
+}
+
+/* Style the form elements */
+.form-group {
+    margin-bottom: 15px;
+}
+
+/* Style the form labels */
+label {
+    color: #fff; /* Text color for labels */
+}
+
+/* Style the input fields */
+.form-control {
+    background-color: rgba(255, 255, 255, 0.1); /* Semi-transparent background for input fields */
+    color: #fff;
+    border-color: #f39c12;
+}
+
+/* Style the submit button */
+.btn-primary {
+    background-color: #f39c12;
+    border: none;
+}
+
+/* Style the footer */
+#foot {
+    color: #fff;
+    text-align: right;
+    padding-top: 10px;
+}

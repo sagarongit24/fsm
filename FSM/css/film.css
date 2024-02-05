@@ -1,0 +1,76 @@
+/* Reset some default browser styles */
+body, h2, table {
+    margin: 0;
+    padding: 0;
+}
+
+/* Set the background image and define its properties */
+body {
+    background-image: url('parasite.jpg'); /* Replace with your Harry Potter-themed background image */
+    background-size: cover; /* Cover the entire viewport */
+    background-attachment: fixed; /* Fix the background image position */
+    background-repeat: no-repeat;
+    font-family: 'Harry Potter Font', Arial, sans-serif; /* You can use a Harry Potter font if available */
+    color: #333; /* Text color */
+}
+
+/* Style the heading */
+h2 {
+    background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black background */
+    padding: 10px;
+    text-align: center;
+    color: #fff; /* Text color */
+    text-shadow: 2px 2px 4px #000; /* Add a subtle text shadow */
+}
+
+/* Style the table */
+table {
+    margin: 20px auto;
+    background-color: rgba(255, 255, 255, 0.9); /* Semi-transparent white background */
+    border-collapse: collapse;
+    width: 80%; /* Adjust the width as needed */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); /* Add a subtle shadow */
+}
+
+table th, table td {
+    padding: 10px;
+    text-align: left;
+    border: 1px solid #ccc;
+}
+
+table th {
+    background-color: #f2f2f2; /* Gray background for table header */
+    font-weight: bold;
+}
+
+/* Style the "Add New Film" link */
+a {
+    display: inline-block;
+    padding: 10px 20px;
+    margin: 10px;
+    background-color: #b32100; /* Maroon background color */
+    color: #fff; /* Text color */
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2); /* Add a subtle shadow */
+}
+
+a:hover {
+    background-color: #8b1700; /* Darker maroon on hover */
+}
+
+/* Style the "Edit" and "Delete" links in the table */
+td a {
+    text-decoration: none;
+    color: #b32100; /* Maroon text color */
+    background-color: #fff; /* White background color */
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2); /* Add a subtle shadow */
+}
+
+td a:hover {
+    background-color: #eee; /* Light gray background on hover */
+}

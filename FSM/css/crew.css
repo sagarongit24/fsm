@@ -1,0 +1,70 @@
+/* crew.css */
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background-image: url('your-background-image.jpg'); /* Replace with your background image */
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    margin: 0;
+    padding: 0;
+}
+
+h1 {
+    background-color: rgba(51, 51, 51, 0.7); /* Semi-transparent dark background */
+    color: #fff;
+    padding: 10px;
+    text-align: center;
+}
+
+table {
+    width: 80%;
+    margin: 20px auto;
+    border-collapse: collapse;
+    background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white background */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); /* Add a subtle shadow */
+}
+
+th, td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #ccc;
+}
+
+th {
+    background-color: #333;
+    color: #fff;
+}
+
+/* Style form labels and input fields */
+label {
+    display: block;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+/* Add styles for links */
+a {
+    text-decoration: none;
+    color: #333;
+    font-weight: bold;
+}
+
+a:hover {
+    color: #555;
+}
+
+/* Add styles for the "Add Crew Member" and "Back to Home" buttons */
+a.button {
+    display: inline-block;
+    margin-top: 10px;
+    background-color: #FFA500; /* Cantaloupe orange */
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    text-decoration: none;
+}
+
+a.button:hover {
+    background-color: #87CEEB; /* Baby blue */
+}

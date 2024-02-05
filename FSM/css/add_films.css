@@ -1,0 +1,81 @@
+/* Reset some default browser styles */
+body, h2, form, label, input, a.button {
+    margin: 0;
+    padding: 0;
+}
+
+/* Set the background image and define its properties */
+body {
+    background-image: url('max.jpg'); /* Replace with your background image */
+    background-size: cover; /* Cover the entire viewport */
+    background-attachment: fixed; /* Fix the background image position */
+    background-repeat: no-repeat;
+    font-family: Arial, sans-serif;
+    color: #333; /* Text color */
+}
+
+/* Style the heading */
+h2 {
+    background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black background */
+    padding: 10px;
+    text-align: center;
+    color: #fff; /* Text color */
+    text-shadow: 2px 2px 4px #000; /* Add a subtle text shadow */
+}
+
+/* Style the form */
+form {
+    background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white background */
+    width: 80%; /* Adjust the width as needed */
+    margin: 20px auto;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); /* Add a subtle shadow */
+}
+
+/* Style form labels and input fields */
+label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+input[type="text"],
+input[type="date"],
+input[type="number"] {
+    width: 97%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+/* Style the submit button */
+input[type="submit"] {
+    background-color: #b32100; /* Maroon background color */
+    color: #fff; /* Text color */
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+input[type="submit"]:hover {
+    background-color: #8b1700; /* Darker maroon on hover */
+}
+
+/* Style the "Back to Films" button */
+body a.button {
+    display: inline-block;
+    margin-top: 10px;
+    background-color: #eed12a; /* Blue background color */
+    color: #fff; /* Text color */
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    text-decoration: none;
+}
+
+body a.button:hover {
+    background-color: #f0dc28; /* Darker blue on hover */
+}
+
