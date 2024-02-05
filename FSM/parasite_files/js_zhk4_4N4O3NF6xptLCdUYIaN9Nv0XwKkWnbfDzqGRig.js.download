@@ -1,0 +1,2054 @@
+
+/**
+ * Adds the custom autocomplete widget behavior.
+ */
+Drupal.apachesolr_autocomplete = {
+  processOne: function(key, settings, context) {
+    // Look for items with the data-apachesolr-autocomplete-id attribute.
+    jQuery(".apachesolr-autocomplete[data-apachesolr-autocomplete-id='" + key + "']", context)
+      .apachesolr_autocomplete(settings.path, {
+      // Classnames for the widget.
+      inputClass: "",
+      loadingClass: "throbbing",
+      // Do not select first suggestion by default.
+      selectFirst: false,
+      // Specify no matching as it wil be done on server-side.
+      matchContains: false,
+      matchSubset: false,
+      // Maximum number of items to show in widget.
+      max: 50,
+      scroll: true,
+      scrollHeight: 360,
+      // Data returned from server is JSON-encoded.
+      dataType: "json",
+      // Function to parse returned json into elements.
+      parse: function(data) {
+        return jQuery.map(data, function(item) {
+          return {
+            data: item,          // Echo the input data.
+            value: item.display, // This will be shown in the options widget.
+            result: item.key     // The actual value to put into the form element.
+          }
+        });
+      },
+      // Return the HTML to display in the options widget.
+      formatItem: function(item) {
+        return item.display;
+      }
+    }).result(function(item, element) {
+      // Handle selection of an element in the autocomplete widget.
+      // We should submit the widget's parent form.
+      jQuery(this).closest("form").submit();
+    }).addClass('form-autocomplete'); // Add Drupal autocomplete widget's style.
+  }
+};
+Drupal.behaviors.apachesolr_autocomplete = {
+  attach: function(context) {
+    // Check that settings exist.
+    if (!Drupal.settings.apachesolr_autocomplete || !Drupal.settings.apachesolr_autocomplete.forms) {
+      return;
+    }
+
+    // Cycle thru the settings array which contains:
+    //   key => settingsArray
+    // where
+    //   key: the data-apachesolr-autocomplete-id HTML attribute to look for
+    //        (which was added on the form_alter)
+    //   settings: and
+    jQuery.each(Drupal.settings.apachesolr_autocomplete.forms, function(key, settings) {
+      Drupal.apachesolr_autocomplete.processOne(key, settings, context);
+    });
+  }
+};
+;
+/*
+ * jQuery Autocomplete plugin 1.1
+ *
+ * Copyright (c) 2009 Jörn Zaefferer
+ *
+ * Dual licensed under the MIT and GPL licenses:
+ *   http://www.opensource.org/licenses/mit-license.php
+ *   http://www.gnu.org/licenses/gpl.html
+ *
+ */
+
+;(function($) {
+	
+$.fn.extend({
+	apachesolr_autocomplete: function(urlOrData, options) {
+		var isUrl = typeof urlOrData == "string";
+		options = $.extend({}, $.Autocompleter.defaults, {
+			url: isUrl ? urlOrData : null,
+			data: isUrl ? null : urlOrData,
+			delay: isUrl ? $.Autocompleter.defaults.delay : 10,
+			max: options && !options.scroll ? 10 : 150
+		}, options);
+		
+		// if highlight is set to false, replace it with a do-nothing function
+		options.highlight = options.highlight || function(value) { return value; };
+		
+		// if the formatMatch option is not specified, then use formatItem for backwards compatibility
+		options.formatMatch = options.formatMatch || options.formatItem;
+		
+		return this.each(function() {
+			new $.Autocompleter(this, options);
+		});
+	},
+	result: function(handler) {
+		return this.bind("result", handler);
+	},
+	search: function(handler) {
+		return this.trigger("search", [handler]);
+	},
+	flushCache: function() {
+		return this.trigger("flushCache");
+	},
+	setOptions: function(options){
+		return this.trigger("setOptions", [options]);
+	},
+	unautocomplete: function() {
+		return this.trigger("unautocomplete");
+	}
+});
+
+$.Autocompleter = function(input, options) {
+
+	var KEY = {
+		UP: 38,
+		DOWN: 40,
+		DEL: 46,
+		TAB: 9,
+		RETURN: 13,
+		ESC: 27,
+		COMMA: 188,
+		PAGEUP: 33,
+		PAGEDOWN: 34,
+		BACKSPACE: 8
+	};
+
+	// Create $ object for input element
+	var $input = $(input).attr("autocomplete", "off").addClass(options.inputClass);
+
+	var timeout;
+	var previousValue = "";
+	var cache = $.Autocompleter.Cache(options);
+	var hasFocus = 0;
+	var lastKeyPressCode;
+	var config = {
+		mouseDownOnSelect: false
+	};
+	var select = $.Autocompleter.Select(options, input, selectCurrent, config);
+	
+	var blockSubmit;
+	
+	// prevent form submit in opera when selecting with return key
+	navigator.userAgent.indexOf('Opera') > -1 && $(input.form).bind("submit.autocomplete", function() {
+		if (blockSubmit) {
+			blockSubmit = false;
+			return false;
+		}
+	});
+	
+	// only opera doesn't trigger keydown multiple times while pressed, others don't work with keypress at all
+	$input.bind((navigator.userAgent.indexOf('Opera') > -1 ? "keypress" : "keydown") + ".autocomplete", function(event) {
+		// a keypress means the input has focus
+		// avoids issue where input had focus before the autocomplete was applied
+		hasFocus = 1;
+		// track last key pressed
+		lastKeyPressCode = event.keyCode;
+		switch(event.keyCode) {
+		
+			case KEY.UP:
+				event.preventDefault();
+				if ( select.visible() ) {
+					select.prev();
+				} else {
+					onChange(0, true);
+				}
+				break;
+				
+			case KEY.DOWN:
+				event.preventDefault();
+				if ( select.visible() ) {
+					select.next();
+				} else {
+					onChange(0, true);
+				}
+				break;
+				
+			case KEY.PAGEUP:
+				event.preventDefault();
+				if ( select.visible() ) {
+					select.pageUp();
+				} else {
+					onChange(0, true);
+				}
+				break;
+				
+			case KEY.PAGEDOWN:
+				event.preventDefault();
+				if ( select.visible() ) {
+					select.pageDown();
+				} else {
+					onChange(0, true);
+				}
+				break;
+			
+			// matches also semicolon
+			case options.multiple && $.trim(options.multipleSeparator) == "," && KEY.COMMA:
+			case KEY.TAB:
+			case KEY.RETURN:
+				if( selectCurrent() ) {
+					// stop default to prevent a form submit, Opera needs special handling
+					event.preventDefault();
+					blockSubmit = true;
+					return false;
+				}
+				break;
+				
+			case KEY.ESC:
+				select.hide();
+				break;
+				
+			default:
+				clearTimeout(timeout);
+				timeout = setTimeout(onChange, options.delay);
+				break;
+		}
+	}).focus(function(){
+		// track whether the field has focus, we shouldn't process any
+		// results if the field no longer has focus
+		hasFocus++;
+	}).blur(function() {
+		hasFocus = 0;
+		if (!config.mouseDownOnSelect) {
+			hideResults();
+		}
+	}).click(function() {
+		// show select when clicking in a focused field
+		if ( hasFocus++ > 1 && !select.visible() ) {
+			onChange(0, true);
+		}
+	}).bind("search", function() {
+		// TODO why not just specifying both arguments?
+		var fn = (arguments.length > 1) ? arguments[1] : null;
+		function findValueCallback(q, data) {
+			var result;
+			if( data && data.length ) {
+				for (var i=0; i < data.length; i++) {
+					if( data[i].result.toLowerCase() == q.toLowerCase() ) {
+						result = data[i];
+						break;
+					}
+				}
+			}
+			if( typeof fn == "function" ) fn(result);
+			else $input.trigger("result", result && [result.data, result.value]);
+		}
+		$.each(trimWords($input.val()), function(i, value) {
+			request(value, findValueCallback, findValueCallback);
+		});
+	}).bind("flushCache", function() {
+		cache.flush();
+	}).bind("setOptions", function() {
+		$.extend(options, arguments[1]);
+		// if we've updated the data, repopulate
+		if ( "data" in arguments[1] )
+			cache.populate();
+	}).bind("unautocomplete", function() {
+		select.unbind();
+		$input.unbind();
+		$(input.form).unbind(".autocomplete");
+	});
+	
+	
+	function selectCurrent() {
+		var selected = select.selected();
+		if( !selected )
+			return false;
+		
+		var v = selected.result;
+		previousValue = v;
+		
+		if ( options.multiple ) {
+			var words = trimWords($input.val());
+			if ( words.length > 1 ) {
+				var seperator = options.multipleSeparator.length;
+				var cursorAt = $(input).selection().start;
+				var wordAt, progress = 0;
+				$.each(words, function(i, word) {
+					progress += word.length;
+					if (cursorAt <= progress) {
+						wordAt = i;
+						return false;
+					}
+					progress += seperator;
+				});
+				words[wordAt] = v;
+				// TODO this should set the cursor to the right position, but it gets overriden somewhere
+				//$.Autocompleter.Selection(input, progress + seperator, progress + seperator);
+				v = words.join( options.multipleSeparator );
+			}
+			v += options.multipleSeparator;
+		}
+		
+		$input.val(v);
+		hideResultsNow();
+		$input.trigger("result", [selected.data, selected.value]);
+		return true;
+	}
+	
+	function onChange(crap, skipPrevCheck) {
+		if( lastKeyPressCode == KEY.DEL ) {
+			select.hide();
+			return;
+		}
+		
+		var currentValue = $input.val();
+		
+		if ( !skipPrevCheck && currentValue == previousValue )
+			return;
+		
+		previousValue = currentValue;
+		
+		currentValue = lastWord(currentValue);
+		if ( currentValue.length >= options.minChars) {
+			$input.addClass(options.loadingClass);
+			if (!options.matchCase)
+				currentValue = currentValue.toLowerCase();
+			request(currentValue, receiveData, hideResultsNow);
+		} else {
+			stopLoading();
+			select.hide();
+		}
+	};
+	
+	function trimWords(value) {
+		if (!value)
+			return [""];
+		if (!options.multiple)
+			return [$.trim(value)];
+		return $.map(value.split(options.multipleSeparator), function(word) {
+			return $.trim(value).length ? $.trim(word) : null;
+		});
+	}
+	
+	function lastWord(value) {
+		if ( !options.multiple )
+			return value;
+		var words = trimWords(value);
+		if (words.length == 1) 
+			return words[0];
+		var cursorAt = $(input).selection().start;
+		if (cursorAt == value.length) {
+			words = trimWords(value)
+		} else {
+			words = trimWords(value.replace(value.substring(cursorAt), ""));
+		}
+		return words[words.length - 1];
+	}
+	
+	// fills in the input box w/the first match (assumed to be the best match)
+	// q: the term entered
+	// sValue: the first matching result
+	function autoFill(q, sValue){
+		// autofill in the complete box w/the first match as long as the user hasn't entered in more data
+		// if the last user key pressed was backspace, don't autofill
+		if( options.autoFill && (lastWord($input.val()).toLowerCase() == q.toLowerCase()) && lastKeyPressCode != KEY.BACKSPACE ) {
+			// fill in the value (keep the case the user has typed)
+			$input.val($input.val() + sValue.substring(lastWord(previousValue).length));
+			// select the portion of the value not typed by the user (so the next character will erase)
+			$(input).selection(previousValue.length, previousValue.length + sValue.length);
+		}
+	};
+
+	function hideResults() {
+		clearTimeout(timeout);
+		timeout = setTimeout(hideResultsNow, 200);
+	};
+
+	function hideResultsNow() {
+		var wasVisible = select.visible();
+		select.hide();
+		clearTimeout(timeout);
+		stopLoading();
+		if (options.mustMatch) {
+			// call search and run callback
+			$input.search(
+				function (result){
+					// if no value found, clear the input box
+					if( !result ) {
+						if (options.multiple) {
+							var words = trimWords($input.val()).slice(0, -1);
+							$input.val( words.join(options.multipleSeparator) + (words.length ? options.multipleSeparator : "") );
+						}
+						else {
+							$input.val( "" );
+							$input.trigger("result", null);
+						}
+					}
+				}
+			);
+		}
+	};
+
+	function receiveData(q, data) {
+		if ( data && data.length && hasFocus ) {
+			stopLoading();
+			select.display(data, q);
+			autoFill(q, data[0].value);
+			select.show();
+		} else {
+			hideResultsNow();
+		}
+	};
+
+	function request(term, success, failure) {
+		if (!options.matchCase)
+			term = term.toLowerCase();
+		var data = cache.load(term);
+		// recieve the cached data
+		if (data && data.length) {
+			success(term, data);
+		// if an AJAX url has been supplied, try loading the data now
+		} else if( (typeof options.url == "string") && (options.url.length > 0) ){
+			
+			var extraParams = { };
+			$.each(options.extraParams, function(key, param) {
+				extraParams[key] = typeof param == "function" ? param() : param;
+			});
+			
+			$.ajax({
+				// try to leverage ajaxQueue plugin to abort previous requests
+				mode: "abort",
+				// limit abortion to this input
+				port: "autocomplete" + input.name,
+				dataType: options.dataType,
+				url: options.url,
+				data: $.extend({
+					query: lastWord(term),
+					limit: options.max
+				}, extraParams),
+				success: function(data) {
+					var parsed = options.parse && options.parse(data) || parse(data);
+					cache.add(term, parsed);
+					success(term, parsed);
+				}
+			});
+		} else {
+			// if we have a failure, we need to empty the list -- this prevents the the [TAB] key from selecting the last successful match
+			select.emptyList();
+			failure(term);
+		}
+	};
+	
+	function parse(data) {
+		var parsed = [];
+		var rows = data.split("\n");
+		for (var i=0; i < rows.length; i++) {
+			var row = $.trim(rows[i]);
+			if (row) {
+				row = row.split("|");
+				parsed[parsed.length] = {
+					data: row,
+					value: row[0],
+					result: options.formatResult && options.formatResult(row, row[0]) || row[0]
+				};
+			}
+		}
+		return parsed;
+	};
+
+	function stopLoading() {
+		$input.removeClass(options.loadingClass);
+	};
+
+};
+
+$.Autocompleter.defaults = {
+	inputClass: "ac_input",
+	resultsClass: "ac_results",
+	loadingClass: "ac_loading",
+	minChars: 1,
+	delay: 400,
+	matchCase: false,
+	matchSubset: true,
+	matchContains: false,
+	cacheLength: 10,
+	max: 100,
+	mustMatch: false,
+	extraParams: {},
+	selectFirst: true,
+	formatItem: function(row) { return row[0]; },
+	formatMatch: null,
+	autoFill: false,
+	width: 0,
+	multiple: false,
+	multipleSeparator: ", ",
+	highlight: function(value, term) {
+		return value.replace(new RegExp("(?![^&;]+;)(?!<[^<>]*)(" + term.replace(/([\^\$\(\)\[\]\{\}\*\.\+\?\|\\])/gi, "\\$1") + ")(?![^<>]*>)(?![^&;]+;)", "gi"), "<strong>$1</strong>");
+	},
+    scroll: true,
+    scrollHeight: 180
+};
+
+$.Autocompleter.Cache = function(options) {
+
+	var data = {};
+	var length = 0;
+	
+	function matchSubset(s, sub) {
+		if (!options.matchCase) 
+			s = s.toLowerCase();
+		var i = s.indexOf(sub);
+		if (options.matchContains == "word"){
+			i = s.toLowerCase().search("\\b" + sub.toLowerCase());
+		}
+		if (i == -1) return false;
+		return i == 0 || options.matchContains;
+	};
+	
+	function add(q, value) {
+		if (length > options.cacheLength){
+			flush();
+		}
+		if (!data[q]){ 
+			length++;
+		}
+		data[q] = value;
+	}
+	
+	function populate(){
+		if( !options.data ) return false;
+		// track the matches
+		var stMatchSets = {},
+			nullData = 0;
+
+		// no url was specified, we need to adjust the cache length to make sure it fits the local data store
+		if( !options.url ) options.cacheLength = 1;
+		
+		// track all options for minChars = 0
+		stMatchSets[""] = [];
+		
+		// loop through the array and create a lookup structure
+		for ( var i = 0, ol = options.data.length; i < ol; i++ ) {
+			var rawValue = options.data[i];
+			// if rawValue is a string, make an array otherwise just reference the array
+			rawValue = (typeof rawValue == "string") ? [rawValue] : rawValue;
+			
+			var value = options.formatMatch(rawValue, i+1, options.data.length);
+			if ( value === false )
+				continue;
+				
+			var firstChar = value.charAt(0).toLowerCase();
+			// if no lookup array for this character exists, look it up now
+			if( !stMatchSets[firstChar] ) 
+				stMatchSets[firstChar] = [];
+
+			// if the match is a string
+			var row = {
+				value: value,
+				data: rawValue,
+				result: options.formatResult && options.formatResult(rawValue) || value
+			};
+			
+			// push the current match into the set list
+			stMatchSets[firstChar].push(row);
+
+			// keep track of minChars zero items
+			if ( nullData++ < options.max ) {
+				stMatchSets[""].push(row);
+			}
+		};
+
+		// add the data items to the cache
+		$.each(stMatchSets, function(i, value) {
+			// increase the cache size
+			options.cacheLength++;
+			// add to the cache
+			add(i, value);
+		});
+	}
+	
+	// populate any existing data
+	setTimeout(populate, 25);
+	
+	function flush(){
+		data = {};
+		length = 0;
+	}
+	
+	return {
+		flush: flush,
+		add: add,
+		populate: populate,
+		load: function(q) {
+			if (!options.cacheLength || !length)
+				return null;
+			/* 
+			 * if dealing w/local data and matchContains than we must make sure
+			 * to loop through all the data collections looking for matches
+			 */
+			if( !options.url && options.matchContains ){
+				// track all matches
+				var csub = [];
+				// loop through all the data grids for matches
+				for( var k in data ){
+					// don't search through the stMatchSets[""] (minChars: 0) cache
+					// this prevents duplicates
+					if( k.length > 0 ){
+						var c = data[k];
+						$.each(c, function(i, x) {
+							// if we've got a match, add it to the array
+							if (matchSubset(x.value, q)) {
+								csub.push(x);
+							}
+						});
+					}
+				}				
+				return csub;
+			} else 
+			// if the exact item exists, use it
+			if (data[q]){
+				return data[q];
+			} else
+			if (options.matchSubset) {
+				for (var i = q.length - 1; i >= options.minChars; i--) {
+					var c = data[q.substr(0, i)];
+					if (c) {
+						var csub = [];
+						$.each(c, function(i, x) {
+							if (matchSubset(x.value, q)) {
+								csub[csub.length] = x;
+							}
+						});
+						return csub;
+					}
+				}
+			}
+			return null;
+		}
+	};
+};
+
+$.Autocompleter.Select = function (options, input, select, config) {
+	var CLASSES = {
+		ACTIVE: "ac_over"
+	};
+	
+	var listItems,
+		active = -1,
+		data,
+		term = "",
+		needsInit = true,
+		element,
+		list;
+	
+	// Create results
+	function init() {
+		if (!needsInit)
+			return;
+		element = $("<div/>")
+		.hide()
+		.addClass(options.resultsClass)
+		.css("position", "absolute")
+		.appendTo(document.body);
+	
+		list = $("<ul/>").appendTo(element).mouseover( function(event) {
+			if(target(event).nodeName && target(event).nodeName.toUpperCase() == 'LI') {
+	            active = $("li", list).removeClass(CLASSES.ACTIVE).index(target(event));
+			    $(target(event)).addClass(CLASSES.ACTIVE);            
+	        }
+		}).click(function(event) {
+			$(target(event)).addClass(CLASSES.ACTIVE);
+			select();
+			// TODO provide option to avoid setting focus again after selection? useful for cleanup-on-focus
+			input.focus();
+			return false;
+		}).mousedown(function() {
+			config.mouseDownOnSelect = true;
+		}).mouseup(function() {
+			config.mouseDownOnSelect = false;
+		});
+		
+		if( options.width > 0 )
+			element.css("width", options.width);
+			
+		needsInit = false;
+	} 
+	
+	function target(event) {
+		var element = event.target;
+		while(element && element.tagName != "LI")
+			element = element.parentNode;
+		// more fun with IE, sometimes event.target is empty, just ignore it then
+		if(!element)
+			return [];
+		return element;
+	}
+
+	function moveSelect(step) {
+		listItems.slice(active, active + 1).removeClass(CLASSES.ACTIVE);
+		movePosition(step);
+        var activeItem = listItems.slice(active, active + 1).addClass(CLASSES.ACTIVE);
+        if(options.scroll) {
+            var offset = 0;
+            listItems.slice(0, active).each(function() {
+				offset += this.offsetHeight;
+			});
+            if((offset + activeItem[0].offsetHeight - list.scrollTop()) > list[0].clientHeight) {
+                list.scrollTop(offset + activeItem[0].offsetHeight - list.innerHeight());
+            } else if(offset < list.scrollTop()) {
+                list.scrollTop(offset);
+            }
+        }
+	};
+	
+	function movePosition(step) {
+		active += step;
+		if (active < 0) {
+			active = listItems.size() - 1;
+		} else if (active >= listItems.size()) {
+			active = 0;
+		}
+	}
+	
+	function limitNumberOfItems(available) {
+		return options.max && options.max < available
+			? options.max
+			: available;
+	}
+	
+	function fillList() {
+		list.empty();
+		var max = limitNumberOfItems(data.length);
+		for (var i=0; i < max; i++) {
+			if (!data[i])
+				continue;
+			var formatted = options.formatItem(data[i].data, i+1, max, data[i].value, term);
+			if ( formatted === false )
+				continue;
+			var li = $("<li/>").html( options.highlight(formatted, term) ).addClass(i%2 == 0 ? "ac_even" : "ac_odd").appendTo(list)[0];
+			$.data(li, "ac_data", data[i]);
+		}
+		listItems = list.find("li");
+		if ( options.selectFirst ) {
+			listItems.slice(0, 1).addClass(CLASSES.ACTIVE);
+			active = 0;
+		}
+		// apply bgiframe if available
+		if ( $.fn.bgiframe )
+			list.bgiframe();
+	}
+	
+	return {
+		display: function(d, q) {
+			init();
+			data = d;
+			term = q;
+			fillList();
+		},
+		next: function() {
+			moveSelect(1);
+		},
+		prev: function() {
+			moveSelect(-1);
+		},
+		pageUp: function() {
+			if (active != 0 && active - 8 < 0) {
+				moveSelect( -active );
+			} else {
+				moveSelect(-8);
+			}
+		},
+		pageDown: function() {
+			if (active != listItems.size() - 1 && active + 8 > listItems.size()) {
+				moveSelect( listItems.size() - 1 - active );
+			} else {
+				moveSelect(8);
+			}
+		},
+		hide: function() {
+			element && element.hide();
+			listItems && listItems.removeClass(CLASSES.ACTIVE);
+			active = -1;
+		},
+		visible : function() {
+			return element && element.is(":visible");
+		},
+		current: function() {
+			return this.visible() && (listItems.filter("." + CLASSES.ACTIVE)[0] || options.selectFirst && listItems[0]);
+		},
+		show: function() {
+			var offset = $(input).offset();
+			element.css({
+				width: typeof options.width == "string" || options.width > 0 ? options.width : $(input).outerWidth(),
+				top: offset.top + input.offsetHeight,
+				left: offset.left
+			}).show();
+            if(options.scroll) {
+                list.scrollTop(0);
+                list.css({
+					maxHeight: options.scrollHeight,
+					overflow: 'auto'
+				});
+				
+                if((navigator.userAgent.indexOf('MSIE') !== -1 || navigator.appVersion.indexOf('Trident/') > 0) && typeof document.body.style.maxHeight === "undefined") {
+					var listHeight = 0;
+					listItems.each(function() {
+						listHeight += this.offsetHeight;
+					});
+					var scrollbarsVisible = listHeight > options.scrollHeight;
+                    list.css('height', scrollbarsVisible ? options.scrollHeight : listHeight );
+					if (!scrollbarsVisible) {
+						// IE doesn't recalculate width when scrollbar disappears
+						listItems.width( list.width() - parseInt(listItems.css("padding-left")) - parseInt(listItems.css("padding-right")) );
+					}
+                }
+                
+            }
+		},
+		selected: function() {
+			var selected = listItems && listItems.filter("." + CLASSES.ACTIVE).removeClass(CLASSES.ACTIVE);
+			return selected && selected.length && $.data(selected[0], "ac_data");
+		},
+		emptyList: function (){
+			list && list.empty();
+		},
+		unbind: function() {
+			element && element.remove();
+		}
+	};
+};
+
+$.fn.selection = function(start, end) {
+	if (start !== undefined) {
+		return this.each(function() {
+			if( this.createTextRange ){
+				var selRange = this.createTextRange();
+				if (end === undefined || start == end) {
+					selRange.move("character", start);
+					selRange.select();
+				} else {
+					selRange.collapse(true);
+					selRange.moveStart("character", start);
+					selRange.moveEnd("character", end);
+					selRange.select();
+				}
+			} else if( this.setSelectionRange ){
+				this.setSelectionRange(start, end);
+			} else if( this.selectionStart ){
+				this.selectionStart = start;
+				this.selectionEnd = end;
+			}
+		});
+	}
+	var field = this[0];
+	if ( field.createTextRange ) {
+		var range = document.selection.createRange(),
+			orig = field.value,
+			teststring = "<->",
+			textLength = range.text.length;
+		range.text = teststring;
+		var caretAt = field.value.indexOf(teststring);
+		field.value = orig;
+		this.selection(caretAt, caretAt + textLength);
+		return {
+			start: caretAt,
+			end: caretAt + textLength
+		}
+	} else if( field.selectionStart !== undefined ){
+		return {
+			start: field.selectionStart,
+			end: field.selectionEnd
+		}
+	}
+};
+
+})(jQuery);
+;
+(function ($) {
+
+  Drupal.behaviors.captcha = {
+    attach: function (context) {
+
+      // Turn off autocompletion for the CAPTCHA response field.
+      // We do it here with JavaScript (instead of directly in the markup)
+      // because this autocomplete attribute is not standard and
+      // it would break (X)HTML compliance.
+      $("#edit-captcha-response").attr("autocomplete", "off");
+
+    }
+  };
+
+  Drupal.behaviors.captchaAdmin = {
+    attach: function (context) {
+      // Add onclick handler to checkbox for adding a CAPTCHA description
+      // so that the textfields for the CAPTCHA description are hidden
+      // when no description should be added.
+      // @todo: div.form-item-captcha-description depends on theming, maybe
+      // it's better to add our own wrapper with id (instead of a class).
+      $("#edit-captcha-add-captcha-description").click(function() {
+        if ($("#edit-captcha-add-captcha-description").is(":checked")) {
+          // Show the CAPTCHA description textfield(s).
+          $("div.form-item-captcha-description").show('slow');
+        }
+        else {
+          // Hide the CAPTCHA description textfield(s).
+          $("div.form-item-captcha-description").hide('slow');
+        }
+      });
+      // Hide the CAPTCHA description textfields if option is disabled on page load.
+      if (!$("#edit-captcha-add-captcha-description").is(":checked")) {
+        $("div.form-item-captcha-description").hide();
+      }
+    }
+
+  };
+
+})(jQuery);
+;
+Drupal.TBMegaMenu = Drupal.TBMegaMenu || {};
+
+(function ($) {
+  Drupal.TBMegaMenu.menuInstance = false;
+  Drupal.behaviors.tbMegaMenuAction = {
+    attach: function(context) {
+      $('.tb-megamenu-button').click(function() {
+        if(parseInt($(this).parent().children('.nav-collapse').height())) {
+          $(this).parent().children('.nav-collapse').css({height: 0, overflow: 'hidden'});
+        }
+        else {
+          $(this).parent().children('.nav-collapse').css({height: 'auto', overflow: 'visible'});
+        }
+      });
+      var isTouch = 'ontouchstart' in window && !(/hp-tablet/gi).test(navigator.appVersion);
+      if(!isTouch){
+        $(document).ready(function($){
+          var mm_duration = 0;
+          $('.t3-megamenu').each (function(){
+            if ($(this).data('duration')) {
+              mm_duration = $(this).data('duration');
+            }
+          });
+          var mm_timeout = mm_duration ? 100 + mm_duration : 500;
+          $('.nav > li, li.mega').hover(function(event) {
+            var $this = $(this);
+            if ($this.hasClass ('mega')) {
+              $this.addClass ('animating');
+              clearTimeout ($this.data('animatingTimeout'));
+              $this.data('animatingTimeout', setTimeout(function(){$this.removeClass ('animating')}, mm_timeout));
+              clearTimeout ($this.data('hoverTimeout'));
+              $this.data('hoverTimeout', setTimeout(function(){$this.addClass ('open')}, 100));
+            } else {
+              clearTimeout ($this.data('hoverTimeout'));
+              $this.data('hoverTimeout', 
+              setTimeout(function(){$this.addClass ('open')}, 100));
+            }
+          },
+          function(event) {
+            var $this = $(this);
+            if ($this.hasClass ('mega')) {
+              $this.addClass ('animating');
+              clearTimeout ($this.data('animatingTimeout'));
+              $this.data('animatingTimeout', 
+              setTimeout(function(){$this.removeClass ('animating')}, mm_timeout));
+              clearTimeout ($this.data('hoverTimeout'));
+              $this.data('hoverTimeout', setTimeout(function(){$this.removeClass ('open')}, 100));
+            } else {
+              clearTimeout ($this.data('hoverTimeout'));
+              $this.data('hoverTimeout', 
+              setTimeout(function(){$this.removeClass ('open')}, 100));
+            }
+          });
+        });
+      }
+    }
+  }
+})(jQuery);
+
+;
+Drupal.TBMegaMenu = Drupal.TBMegaMenu || {};
+
+(function ($) {
+  Drupal.TBMegaMenu.createTouchMenu = function(items) {
+      items.children('a').each( function() {
+	var $item = $(this);
+        var tbitem = $(this).parent();
+        $item.click( function(event){
+          if ($item.hasClass('tb-megamenu-clicked')) {
+            var $uri = $item.attr('href');
+            window.location.href = $uri;
+          }
+          else {
+            event.preventDefault();
+            $item.addClass('tb-megamenu-clicked');
+            if(!tbitem.hasClass('open')){	
+              tbitem.addClass('open');
+            }
+          }
+        }).closest('li').mouseleave( function(){
+          $item.removeClass('tb-megamenu-clicked');
+          tbitem.removeClass('open');
+        });
+     });
+     /*
+     items.children('a').children('span.caret').each( function() {
+	var $item = $(this).parent();
+        $item.click(function(event){
+          tbitem = $item.parent();
+          if ($item.hasClass('tb-megamenu-clicked')) {
+            Drupal.TBMegaMenu.eventStopPropagation(event);
+            if(tbitem.hasClass('open')){	
+              tbitem.removeClass('open');
+              $item.removeClass('tb-megamenu-clicked');
+            }
+          }
+          else {
+            Drupal.TBMegaMenu.eventStopPropagation(event);
+            $item.addClass('tb-megamenu-clicked');
+            if(!tbitem.hasClass('open')){	
+              tbitem.addClass('open');
+              $item.removeClass('tb-megamenu-clicked');
+            }
+          }
+        });
+     });
+     */
+  }
+  
+  Drupal.TBMegaMenu.eventStopPropagation = function(event) {
+    if (event.stopPropagation) {
+      event.stopPropagation();
+    }
+    else if (window.event) {
+      window.event.cancelBubble = true;
+    }
+  }  
+  Drupal.behaviors.tbMegaMenuTouchAction = {
+    attach: function(context) {
+      var isTouch = 'ontouchstart' in window && !(/hp-tablet/gi).test(navigator.appVersion);
+      if(isTouch){
+        $('html').addClass('touch');
+        Drupal.TBMegaMenu.createTouchMenu($('.tb-megamenu ul.nav li.mega').has('.dropdown-menu'));
+      }
+    }
+  }
+})(jQuery);
+;
+(function ($) {
+
+/**
+ * Retrieves the summary for the first element.
+ */
+$.fn.drupalGetSummary = function () {
+  var callback = this.data('summaryCallback');
+  return (this[0] && callback) ? $.trim(callback(this[0])) : '';
+};
+
+/**
+ * Sets the summary for all matched elements.
+ *
+ * @param callback
+ *   Either a function that will be called each time the summary is
+ *   retrieved or a string (which is returned each time).
+ */
+$.fn.drupalSetSummary = function (callback) {
+  var self = this;
+
+  // To facilitate things, the callback should always be a function. If it's
+  // not, we wrap it into an anonymous function which just returns the value.
+  if (typeof callback != 'function') {
+    var val = callback;
+    callback = function () { return val; };
+  }
+
+  return this
+    .data('summaryCallback', callback)
+    // To prevent duplicate events, the handlers are first removed and then
+    // (re-)added.
+    .unbind('formUpdated.summary')
+    .bind('formUpdated.summary', function () {
+      self.trigger('summaryUpdated');
+    })
+    // The actual summaryUpdated handler doesn't fire when the callback is
+    // changed, so we have to do this manually.
+    .trigger('summaryUpdated');
+};
+
+/**
+ * Sends a 'formUpdated' event each time a form element is modified.
+ */
+Drupal.behaviors.formUpdated = {
+  attach: function (context) {
+    // These events are namespaced so that we can remove them later.
+    var events = 'change.formUpdated click.formUpdated blur.formUpdated keyup.formUpdated';
+    $(context)
+      // Since context could be an input element itself, it's added back to
+      // the jQuery object and filtered again.
+      .find(':input').andSelf().filter(':input')
+      // To prevent duplicate events, the handlers are first removed and then
+      // (re-)added.
+      .unbind(events).bind(events, function () {
+        $(this).trigger('formUpdated');
+      });
+  }
+};
+
+/**
+ * Prepopulate form fields with information from the visitor cookie.
+ */
+Drupal.behaviors.fillUserInfoFromCookie = {
+  attach: function (context, settings) {
+    $('form.user-info-from-cookie').once('user-info-from-cookie', function () {
+      var formContext = this;
+      $.each(['name', 'mail', 'homepage'], function () {
+        var $element = $('[name=' + this + ']', formContext);
+        var cookie = $.cookie('Drupal.visitor.' + this);
+        if ($element.length && cookie) {
+          $element.val(cookie);
+        }
+      });
+    });
+  }
+};
+
+})(jQuery);
+;
+/*!
+ * Masonry PACKAGED v3.3.2
+ * Cascading grid layout library
+ * http://masonry.desandro.com
+ * MIT License
+ * by David DeSandro
+ */
+
+!function(a){function b(){}function c(a){function c(b){b.prototype.option||(b.prototype.option=function(b){a.isPlainObject(b)&&(this.options=a.extend(!0,this.options,b))})}function e(b,c){a.fn[b]=function(e){if("string"==typeof e){for(var g=d.call(arguments,1),h=0,i=this.length;i>h;h++){var j=this[h],k=a.data(j,b);if(k)if(a.isFunction(k[e])&&"_"!==e.charAt(0)){var l=k[e].apply(k,g);if(void 0!==l)return l}else f("no such method '"+e+"' for "+b+" instance");else f("cannot call methods on "+b+" prior to initialization; attempted to call '"+e+"'")}return this}return this.each(function(){var d=a.data(this,b);d?(d.option(e),d._init()):(d=new c(this,e),a.data(this,b,d))})}}if(a){var f="undefined"==typeof console?b:function(a){console.error(a)};return a.bridget=function(a,b){c(b),e(a,b)},a.bridget}}var d=Array.prototype.slice;"function"==typeof define&&define.amd?define("jquery-bridget/jquery.bridget",["jquery"],c):c("object"==typeof exports?require("jquery"):a.jQuery)}(window),function(a){function b(b){var c=a.event;return c.target=c.target||c.srcElement||b,c}var c=document.documentElement,d=function(){};c.addEventListener?d=function(a,b,c){a.addEventListener(b,c,!1)}:c.attachEvent&&(d=function(a,c,d){a[c+d]=d.handleEvent?function(){var c=b(a);d.handleEvent.call(d,c)}:function(){var c=b(a);d.call(a,c)},a.attachEvent("on"+c,a[c+d])});var e=function(){};c.removeEventListener?e=function(a,b,c){a.removeEventListener(b,c,!1)}:c.detachEvent&&(e=function(a,b,c){a.detachEvent("on"+b,a[b+c]);try{delete a[b+c]}catch(d){a[b+c]=void 0}});var f={bind:d,unbind:e};"function"==typeof define&&define.amd?define("eventie/eventie",f):"object"==typeof exports?module.exports=f:a.eventie=f}(window),function(){function a(){}function b(a,b){for(var c=a.length;c--;)if(a[c].listener===b)return c;return-1}function c(a){return function(){return this[a].apply(this,arguments)}}var d=a.prototype,e=this,f=e.EventEmitter;d.getListeners=function(a){var b,c,d=this._getEvents();if(a instanceof RegExp){b={};for(c in d)d.hasOwnProperty(c)&&a.test(c)&&(b[c]=d[c])}else b=d[a]||(d[a]=[]);return b},d.flattenListeners=function(a){var b,c=[];for(b=0;b<a.length;b+=1)c.push(a[b].listener);return c},d.getListenersAsObject=function(a){var b,c=this.getListeners(a);return c instanceof Array&&(b={},b[a]=c),b||c},d.addListener=function(a,c){var d,e=this.getListenersAsObject(a),f="object"==typeof c;for(d in e)e.hasOwnProperty(d)&&-1===b(e[d],c)&&e[d].push(f?c:{listener:c,once:!1});return this},d.on=c("addListener"),d.addOnceListener=function(a,b){return this.addListener(a,{listener:b,once:!0})},d.once=c("addOnceListener"),d.defineEvent=function(a){return this.getListeners(a),this},d.defineEvents=function(a){for(var b=0;b<a.length;b+=1)this.defineEvent(a[b]);return this},d.removeListener=function(a,c){var d,e,f=this.getListenersAsObject(a);for(e in f)f.hasOwnProperty(e)&&(d=b(f[e],c),-1!==d&&f[e].splice(d,1));return this},d.off=c("removeListener"),d.addListeners=function(a,b){return this.manipulateListeners(!1,a,b)},d.removeListeners=function(a,b){return this.manipulateListeners(!0,a,b)},d.manipulateListeners=function(a,b,c){var d,e,f=a?this.removeListener:this.addListener,g=a?this.removeListeners:this.addListeners;if("object"!=typeof b||b instanceof RegExp)for(d=c.length;d--;)f.call(this,b,c[d]);else for(d in b)b.hasOwnProperty(d)&&(e=b[d])&&("function"==typeof e?f.call(this,d,e):g.call(this,d,e));return this},d.removeEvent=function(a){var b,c=typeof a,d=this._getEvents();if("string"===c)delete d[a];else if(a instanceof RegExp)for(b in d)d.hasOwnProperty(b)&&a.test(b)&&delete d[b];else delete this._events;return this},d.removeAllListeners=c("removeEvent"),d.emitEvent=function(a,b){var c,d,e,f,g=this.getListenersAsObject(a);for(e in g)if(g.hasOwnProperty(e))for(d=g[e].length;d--;)c=g[e][d],c.once===!0&&this.removeListener(a,c.listener),f=c.listener.apply(this,b||[]),f===this._getOnceReturnValue()&&this.removeListener(a,c.listener);return this},d.trigger=c("emitEvent"),d.emit=function(a){var b=Array.prototype.slice.call(arguments,1);return this.emitEvent(a,b)},d.setOnceReturnValue=function(a){return this._onceReturnValue=a,this},d._getOnceReturnValue=function(){return this.hasOwnProperty("_onceReturnValue")?this._onceReturnValue:!0},d._getEvents=function(){return this._events||(this._events={})},a.noConflict=function(){return e.EventEmitter=f,a},"function"==typeof define&&define.amd?define("eventEmitter/EventEmitter",[],function(){return a}):"object"==typeof module&&module.exports?module.exports=a:e.EventEmitter=a}.call(this),function(a){function b(a){if(a){if("string"==typeof d[a])return a;a=a.charAt(0).toUpperCase()+a.slice(1);for(var b,e=0,f=c.length;f>e;e++)if(b=c[e]+a,"string"==typeof d[b])return b}}var c="Webkit Moz ms Ms O".split(" "),d=document.documentElement.style;"function"==typeof define&&define.amd?define("get-style-property/get-style-property",[],function(){return b}):"object"==typeof exports?module.exports=b:a.getStyleProperty=b}(window),function(a){function b(a){var b=parseFloat(a),c=-1===a.indexOf("%")&&!isNaN(b);return c&&b}function c(){}function d(){for(var a={width:0,height:0,innerWidth:0,innerHeight:0,outerWidth:0,outerHeight:0},b=0,c=g.length;c>b;b++){var d=g[b];a[d]=0}return a}function e(c){function e(){if(!m){m=!0;var d=a.getComputedStyle;if(j=function(){var a=d?function(a){return d(a,null)}:function(a){return a.currentStyle};return function(b){var c=a(b);return c||f("Style returned "+c+". Are you running this code in a hidden iframe on Firefox? See http://bit.ly/getsizebug1"),c}}(),k=c("boxSizing")){var e=document.createElement("div");e.style.width="200px",e.style.padding="1px 2px 3px 4px",e.style.borderStyle="solid",e.style.borderWidth="1px 2px 3px 4px",e.style[k]="border-box";var g=document.body||document.documentElement;g.appendChild(e);var h=j(e);l=200===b(h.width),g.removeChild(e)}}}function h(a){if(e(),"string"==typeof a&&(a=document.querySelector(a)),a&&"object"==typeof a&&a.nodeType){var c=j(a);if("none"===c.display)return d();var f={};f.width=a.offsetWidth,f.height=a.offsetHeight;for(var h=f.isBorderBox=!(!k||!c[k]||"border-box"!==c[k]),m=0,n=g.length;n>m;m++){var o=g[m],p=c[o];p=i(a,p);var q=parseFloat(p);f[o]=isNaN(q)?0:q}var r=f.paddingLeft+f.paddingRight,s=f.paddingTop+f.paddingBottom,t=f.marginLeft+f.marginRight,u=f.marginTop+f.marginBottom,v=f.borderLeftWidth+f.borderRightWidth,w=f.borderTopWidth+f.borderBottomWidth,x=h&&l,y=b(c.width);y!==!1&&(f.width=y+(x?0:r+v));var z=b(c.height);return z!==!1&&(f.height=z+(x?0:s+w)),f.innerWidth=f.width-(r+v),f.innerHeight=f.height-(s+w),f.outerWidth=f.width+t,f.outerHeight=f.height+u,f}}function i(b,c){if(a.getComputedStyle||-1===c.indexOf("%"))return c;var d=b.style,e=d.left,f=b.runtimeStyle,g=f&&f.left;return g&&(f.left=b.currentStyle.left),d.left=c,c=d.pixelLeft,d.left=e,g&&(f.left=g),c}var j,k,l,m=!1;return h}var f="undefined"==typeof console?c:function(a){console.error(a)},g=["paddingLeft","paddingRight","paddingTop","paddingBottom","marginLeft","marginRight","marginTop","marginBottom","borderLeftWidth","borderRightWidth","borderTopWidth","borderBottomWidth"];"function"==typeof define&&define.amd?define("get-size/get-size",["get-style-property/get-style-property"],e):"object"==typeof exports?module.exports=e(require("desandro-get-style-property")):a.getSize=e(a.getStyleProperty)}(window),function(a){function b(a){"function"==typeof a&&(b.isReady?a():g.push(a))}function c(a){var c="readystatechange"===a.type&&"complete"!==f.readyState;b.isReady||c||d()}function d(){b.isReady=!0;for(var a=0,c=g.length;c>a;a++){var d=g[a];d()}}function e(e){return"complete"===f.readyState?d():(e.bind(f,"DOMContentLoaded",c),e.bind(f,"readystatechange",c),e.bind(a,"load",c)),b}var f=a.document,g=[];b.isReady=!1,"function"==typeof define&&define.amd?define("doc-ready/doc-ready",["eventie/eventie"],e):"object"==typeof exports?module.exports=e(require("eventie")):a.docReady=e(a.eventie)}(window),function(a){function b(a,b){return a[g](b)}function c(a){if(!a.parentNode){var b=document.createDocumentFragment();b.appendChild(a)}}function d(a,b){c(a);for(var d=a.parentNode.querySelectorAll(b),e=0,f=d.length;f>e;e++)if(d[e]===a)return!0;return!1}function e(a,d){return c(a),b(a,d)}var f,g=function(){if(a.matches)return"matches";if(a.matchesSelector)return"matchesSelector";for(var b=["webkit","moz","ms","o"],c=0,d=b.length;d>c;c++){var e=b[c],f=e+"MatchesSelector";if(a[f])return f}}();if(g){var h=document.createElement("div"),i=b(h,"div");f=i?b:e}else f=d;"function"==typeof define&&define.amd?define("matches-selector/matches-selector",[],function(){return f}):"object"==typeof exports?module.exports=f:window.matchesSelector=f}(Element.prototype),function(a,b){"function"==typeof define&&define.amd?define("fizzy-ui-utils/utils",["doc-ready/doc-ready","matches-selector/matches-selector"],function(c,d){return b(a,c,d)}):"object"==typeof exports?module.exports=b(a,require("doc-ready"),require("desandro-matches-selector")):a.fizzyUIUtils=b(a,a.docReady,a.matchesSelector)}(window,function(a,b,c){var d={};d.extend=function(a,b){for(var c in b)a[c]=b[c];return a},d.modulo=function(a,b){return(a%b+b)%b};var e=Object.prototype.toString;d.isArray=function(a){return"[object Array]"==e.call(a)},d.makeArray=function(a){var b=[];if(d.isArray(a))b=a;else if(a&&"number"==typeof a.length)for(var c=0,e=a.length;e>c;c++)b.push(a[c]);else b.push(a);return b},d.indexOf=Array.prototype.indexOf?function(a,b){return a.indexOf(b)}:function(a,b){for(var c=0,d=a.length;d>c;c++)if(a[c]===b)return c;return-1},d.removeFrom=function(a,b){var c=d.indexOf(a,b);-1!=c&&a.splice(c,1)},d.isElement="function"==typeof HTMLElement||"object"==typeof HTMLElement?function(a){return a instanceof HTMLElement}:function(a){return a&&"object"==typeof a&&1==a.nodeType&&"string"==typeof a.nodeName},d.setText=function(){function a(a,c){b=b||(void 0!==document.documentElement.textContent?"textContent":"innerText"),a[b]=c}var b;return a}(),d.getParent=function(a,b){for(;a!=document.body;)if(a=a.parentNode,c(a,b))return a},d.getQueryElement=function(a){return"string"==typeof a?document.querySelector(a):a},d.handleEvent=function(a){var b="on"+a.type;this[b]&&this[b](a)},d.filterFindElements=function(a,b){a=d.makeArray(a);for(var e=[],f=0,g=a.length;g>f;f++){var h=a[f];if(d.isElement(h))if(b){c(h,b)&&e.push(h);for(var i=h.querySelectorAll(b),j=0,k=i.length;k>j;j++)e.push(i[j])}else e.push(h)}return e},d.debounceMethod=function(a,b,c){var d=a.prototype[b],e=b+"Timeout";a.prototype[b]=function(){var a=this[e];a&&clearTimeout(a);var b=arguments,f=this;this[e]=setTimeout(function(){d.apply(f,b),delete f[e]},c||100)}},d.toDashed=function(a){return a.replace(/(.)([A-Z])/g,function(a,b,c){return b+"-"+c}).toLowerCase()};var f=a.console;return d.htmlInit=function(c,e){b(function(){for(var b=d.toDashed(e),g=document.querySelectorAll(".js-"+b),h="data-"+b+"-options",i=0,j=g.length;j>i;i++){var k,l=g[i],m=l.getAttribute(h);try{k=m&&JSON.parse(m)}catch(n){f&&f.error("Error parsing "+h+" on "+l.nodeName.toLowerCase()+(l.id?"#"+l.id:"")+": "+n);continue}var o=new c(l,k),p=a.jQuery;p&&p.data(l,e,o)}})},d}),function(a,b){"function"==typeof define&&define.amd?define("outlayer/item",["eventEmitter/EventEmitter","get-size/get-size","get-style-property/get-style-property","fizzy-ui-utils/utils"],function(c,d,e,f){return b(a,c,d,e,f)}):"object"==typeof exports?module.exports=b(a,require("wolfy87-eventemitter"),require("get-size"),require("desandro-get-style-property"),require("fizzy-ui-utils")):(a.Outlayer={},a.Outlayer.Item=b(a,a.EventEmitter,a.getSize,a.getStyleProperty,a.fizzyUIUtils))}(window,function(a,b,c,d,e){function f(a){for(var b in a)return!1;return b=null,!0}function g(a,b){a&&(this.element=a,this.layout=b,this.position={x:0,y:0},this._create())}function h(a){return a.replace(/([A-Z])/g,function(a){return"-"+a.toLowerCase()})}var i=a.getComputedStyle,j=i?function(a){return i(a,null)}:function(a){return a.currentStyle},k=d("transition"),l=d("transform"),m=k&&l,n=!!d("perspective"),o={WebkitTransition:"webkitTransitionEnd",MozTransition:"transitionend",OTransition:"otransitionend",transition:"transitionend"}[k],p=["transform","transition","transitionDuration","transitionProperty"],q=function(){for(var a={},b=0,c=p.length;c>b;b++){var e=p[b],f=d(e);f&&f!==e&&(a[e]=f)}return a}();e.extend(g.prototype,b.prototype),g.prototype._create=function(){this._transn={ingProperties:{},clean:{},onEnd:{}},this.css({position:"absolute"})},g.prototype.handleEvent=function(a){var b="on"+a.type;this[b]&&this[b](a)},g.prototype.getSize=function(){this.size=c(this.element)},g.prototype.css=function(a){var b=this.element.style;for(var c in a){var d=q[c]||c;b[d]=a[c]}},g.prototype.getPosition=function(){var a=j(this.element),b=this.layout.options,c=b.isOriginLeft,d=b.isOriginTop,e=a[c?"left":"right"],f=a[d?"top":"bottom"],g=this.layout.size,h=-1!=e.indexOf("%")?parseFloat(e)/100*g.width:parseInt(e,10),i=-1!=f.indexOf("%")?parseFloat(f)/100*g.height:parseInt(f,10);h=isNaN(h)?0:h,i=isNaN(i)?0:i,h-=c?g.paddingLeft:g.paddingRight,i-=d?g.paddingTop:g.paddingBottom,this.position.x=h,this.position.y=i},g.prototype.layoutPosition=function(){var a=this.layout.size,b=this.layout.options,c={},d=b.isOriginLeft?"paddingLeft":"paddingRight",e=b.isOriginLeft?"left":"right",f=b.isOriginLeft?"right":"left",g=this.position.x+a[d];c[e]=this.getXValue(g),c[f]="";var h=b.isOriginTop?"paddingTop":"paddingBottom",i=b.isOriginTop?"top":"bottom",j=b.isOriginTop?"bottom":"top",k=this.position.y+a[h];c[i]=this.getYValue(k),c[j]="",this.css(c),this.emitEvent("layout",[this])},g.prototype.getXValue=function(a){var b=this.layout.options;return b.percentPosition&&!b.isHorizontal?a/this.layout.size.width*100+"%":a+"px"},g.prototype.getYValue=function(a){var b=this.layout.options;return b.percentPosition&&b.isHorizontal?a/this.layout.size.height*100+"%":a+"px"},g.prototype._transitionTo=function(a,b){this.getPosition();var c=this.position.x,d=this.position.y,e=parseInt(a,10),f=parseInt(b,10),g=e===this.position.x&&f===this.position.y;if(this.setPosition(a,b),g&&!this.isTransitioning)return void this.layoutPosition();var h=a-c,i=b-d,j={};j.transform=this.getTranslate(h,i),this.transition({to:j,onTransitionEnd:{transform:this.layoutPosition},isCleaning:!0})},g.prototype.getTranslate=function(a,b){var c=this.layout.options;return a=c.isOriginLeft?a:-a,b=c.isOriginTop?b:-b,n?"translate3d("+a+"px, "+b+"px, 0)":"translate("+a+"px, "+b+"px)"},g.prototype.goTo=function(a,b){this.setPosition(a,b),this.layoutPosition()},g.prototype.moveTo=m?g.prototype._transitionTo:g.prototype.goTo,g.prototype.setPosition=function(a,b){this.position.x=parseInt(a,10),this.position.y=parseInt(b,10)},g.prototype._nonTransition=function(a){this.css(a.to),a.isCleaning&&this._removeStyles(a.to);for(var b in a.onTransitionEnd)a.onTransitionEnd[b].call(this)},g.prototype._transition=function(a){if(!parseFloat(this.layout.options.transitionDuration))return void this._nonTransition(a);var b=this._transn;for(var c in a.onTransitionEnd)b.onEnd[c]=a.onTransitionEnd[c];for(c in a.to)b.ingProperties[c]=!0,a.isCleaning&&(b.clean[c]=!0);if(a.from){this.css(a.from);var d=this.element.offsetHeight;d=null}this.enableTransition(a.to),this.css(a.to),this.isTransitioning=!0};var r="opacity,"+h(q.transform||"transform");g.prototype.enableTransition=function(){this.isTransitioning||(this.css({transitionProperty:r,transitionDuration:this.layout.options.transitionDuration}),this.element.addEventListener(o,this,!1))},g.prototype.transition=g.prototype[k?"_transition":"_nonTransition"],g.prototype.onwebkitTransitionEnd=function(a){this.ontransitionend(a)},g.prototype.onotransitionend=function(a){this.ontransitionend(a)};var s={"-webkit-transform":"transform","-moz-transform":"transform","-o-transform":"transform"};g.prototype.ontransitionend=function(a){if(a.target===this.element){var b=this._transn,c=s[a.propertyName]||a.propertyName;if(delete b.ingProperties[c],f(b.ingProperties)&&this.disableTransition(),c in b.clean&&(this.element.style[a.propertyName]="",delete b.clean[c]),c in b.onEnd){var d=b.onEnd[c];d.call(this),delete b.onEnd[c]}this.emitEvent("transitionEnd",[this])}},g.prototype.disableTransition=function(){this.removeTransitionStyles(),this.element.removeEventListener(o,this,!1),this.isTransitioning=!1},g.prototype._removeStyles=function(a){var b={};for(var c in a)b[c]="";this.css(b)};var t={transitionProperty:"",transitionDuration:""};return g.prototype.removeTransitionStyles=function(){this.css(t)},g.prototype.removeElem=function(){this.element.parentNode.removeChild(this.element),this.css({display:""}),this.emitEvent("remove",[this])},g.prototype.remove=function(){if(!k||!parseFloat(this.layout.options.transitionDuration))return void this.removeElem();var a=this;this.once("transitionEnd",function(){a.removeElem()}),this.hide()},g.prototype.reveal=function(){delete this.isHidden,this.css({display:""});var a=this.layout.options,b={},c=this.getHideRevealTransitionEndProperty("visibleStyle");b[c]=this.onRevealTransitionEnd,this.transition({from:a.hiddenStyle,to:a.visibleStyle,isCleaning:!0,onTransitionEnd:b})},g.prototype.onRevealTransitionEnd=function(){this.isHidden||this.emitEvent("reveal")},g.prototype.getHideRevealTransitionEndProperty=function(a){var b=this.layout.options[a];if(b.opacity)return"opacity";for(var c in b)return c},g.prototype.hide=function(){this.isHidden=!0,this.css({display:""});var a=this.layout.options,b={},c=this.getHideRevealTransitionEndProperty("hiddenStyle");b[c]=this.onHideTransitionEnd,this.transition({from:a.visibleStyle,to:a.hiddenStyle,isCleaning:!0,onTransitionEnd:b})},g.prototype.onHideTransitionEnd=function(){this.isHidden&&(this.css({display:"none"}),this.emitEvent("hide"))},g.prototype.destroy=function(){this.css({position:"",left:"",right:"",top:"",bottom:"",transition:"",transform:""})},g}),function(a,b){"function"==typeof define&&define.amd?define("outlayer/outlayer",["eventie/eventie","eventEmitter/EventEmitter","get-size/get-size","fizzy-ui-utils/utils","./item"],function(c,d,e,f,g){return b(a,c,d,e,f,g)}):"object"==typeof exports?module.exports=b(a,require("eventie"),require("wolfy87-eventemitter"),require("get-size"),require("fizzy-ui-utils"),require("./item")):a.Outlayer=b(a,a.eventie,a.EventEmitter,a.getSize,a.fizzyUIUtils,a.Outlayer.Item)}(window,function(a,b,c,d,e,f){function g(a,b){var c=e.getQueryElement(a);if(!c)return void(h&&h.error("Bad element for "+this.constructor.namespace+": "+(c||a)));this.element=c,i&&(this.$element=i(this.element)),this.options=e.extend({},this.constructor.defaults),this.option(b);var d=++k;this.element.outlayerGUID=d,l[d]=this,this._create(),this.options.isInitLayout&&this.layout()}var h=a.console,i=a.jQuery,j=function(){},k=0,l={};return g.namespace="outlayer",g.Item=f,g.defaults={containerStyle:{position:"relative"},isInitLayout:!0,isOriginLeft:!0,isOriginTop:!0,isResizeBound:!0,isResizingContainer:!0,transitionDuration:"0.4s",hiddenStyle:{opacity:0,transform:"scale(0.001)"},visibleStyle:{opacity:1,transform:"scale(1)"}},e.extend(g.prototype,c.prototype),g.prototype.option=function(a){e.extend(this.options,a)},g.prototype._create=function(){this.reloadItems(),this.stamps=[],this.stamp(this.options.stamp),e.extend(this.element.style,this.options.containerStyle),this.options.isResizeBound&&this.bindResize()},g.prototype.reloadItems=function(){this.items=this._itemize(this.element.children)},g.prototype._itemize=function(a){for(var b=this._filterFindItemElements(a),c=this.constructor.Item,d=[],e=0,f=b.length;f>e;e++){var g=b[e],h=new c(g,this);d.push(h)}return d},g.prototype._filterFindItemElements=function(a){return e.filterFindElements(a,this.options.itemSelector)},g.prototype.getItemElements=function(){for(var a=[],b=0,c=this.items.length;c>b;b++)a.push(this.items[b].element);return a},g.prototype.layout=function(){this._resetLayout(),this._manageStamps();var a=void 0!==this.options.isLayoutInstant?this.options.isLayoutInstant:!this._isLayoutInited;this.layoutItems(this.items,a),this._isLayoutInited=!0},g.prototype._init=g.prototype.layout,g.prototype._resetLayout=function(){this.getSize()},g.prototype.getSize=function(){this.size=d(this.element)},g.prototype._getMeasurement=function(a,b){var c,f=this.options[a];f?("string"==typeof f?c=this.element.querySelector(f):e.isElement(f)&&(c=f),this[a]=c?d(c)[b]:f):this[a]=0},g.prototype.layoutItems=function(a,b){a=this._getItemsForLayout(a),this._layoutItems(a,b),this._postLayout()},g.prototype._getItemsForLayout=function(a){for(var b=[],c=0,d=a.length;d>c;c++){var e=a[c];e.isIgnored||b.push(e)}return b},g.prototype._layoutItems=function(a,b){if(this._emitCompleteOnItems("layout",a),a&&a.length){for(var c=[],d=0,e=a.length;e>d;d++){var f=a[d],g=this._getItemLayoutPosition(f);g.item=f,g.isInstant=b||f.isLayoutInstant,c.push(g)}this._processLayoutQueue(c)}},g.prototype._getItemLayoutPosition=function(){return{x:0,y:0}},g.prototype._processLayoutQueue=function(a){for(var b=0,c=a.length;c>b;b++){var d=a[b];this._positionItem(d.item,d.x,d.y,d.isInstant)}},g.prototype._positionItem=function(a,b,c,d){d?a.goTo(b,c):a.moveTo(b,c)},g.prototype._postLayout=function(){this.resizeContainer()},g.prototype.resizeContainer=function(){if(this.options.isResizingContainer){var a=this._getContainerSize();a&&(this._setContainerMeasure(a.width,!0),this._setContainerMeasure(a.height,!1))}},g.prototype._getContainerSize=j,g.prototype._setContainerMeasure=function(a,b){if(void 0!==a){var c=this.size;c.isBorderBox&&(a+=b?c.paddingLeft+c.paddingRight+c.borderLeftWidth+c.borderRightWidth:c.paddingBottom+c.paddingTop+c.borderTopWidth+c.borderBottomWidth),a=Math.max(a,0),this.element.style[b?"width":"height"]=a+"px"}},g.prototype._emitCompleteOnItems=function(a,b){function c(){e.dispatchEvent(a+"Complete",null,[b])}function d(){g++,g===f&&c()}var e=this,f=b.length;if(!b||!f)return void c();for(var g=0,h=0,i=b.length;i>h;h++){var j=b[h];j.once(a,d)}},g.prototype.dispatchEvent=function(a,b,c){var d=b?[b].concat(c):c;if(this.emitEvent(a,d),i)if(this.$element=this.$element||i(this.element),b){var e=i.Event(b);e.type=a,this.$element.trigger(e,c)}else this.$element.trigger(a,c)},g.prototype.ignore=function(a){var b=this.getItem(a);b&&(b.isIgnored=!0)},g.prototype.unignore=function(a){var b=this.getItem(a);b&&delete b.isIgnored},g.prototype.stamp=function(a){if(a=this._find(a)){this.stamps=this.stamps.concat(a);for(var b=0,c=a.length;c>b;b++){var d=a[b];this.ignore(d)}}},g.prototype.unstamp=function(a){if(a=this._find(a))for(var b=0,c=a.length;c>b;b++){var d=a[b];e.removeFrom(this.stamps,d),this.unignore(d)}},g.prototype._find=function(a){return a?("string"==typeof a&&(a=this.element.querySelectorAll(a)),a=e.makeArray(a)):void 0},g.prototype._manageStamps=function(){if(this.stamps&&this.stamps.length){this._getBoundingRect();for(var a=0,b=this.stamps.length;b>a;a++){var c=this.stamps[a];this._manageStamp(c)}}},g.prototype._getBoundingRect=function(){var a=this.element.getBoundingClientRect(),b=this.size;this._boundingRect={left:a.left+b.paddingLeft+b.borderLeftWidth,top:a.top+b.paddingTop+b.borderTopWidth,right:a.right-(b.paddingRight+b.borderRightWidth),bottom:a.bottom-(b.paddingBottom+b.borderBottomWidth)}},g.prototype._manageStamp=j,g.prototype._getElementOffset=function(a){var b=a.getBoundingClientRect(),c=this._boundingRect,e=d(a),f={left:b.left-c.left-e.marginLeft,top:b.top-c.top-e.marginTop,right:c.right-b.right-e.marginRight,bottom:c.bottom-b.bottom-e.marginBottom};return f},g.prototype.handleEvent=function(a){var b="on"+a.type;this[b]&&this[b](a)},g.prototype.bindResize=function(){this.isResizeBound||(b.bind(a,"resize",this),this.isResizeBound=!0)},g.prototype.unbindResize=function(){this.isResizeBound&&b.unbind(a,"resize",this),this.isResizeBound=!1},g.prototype.onresize=function(){function a(){b.resize(),delete b.resizeTimeout}this.resizeTimeout&&clearTimeout(this.resizeTimeout);var b=this;this.resizeTimeout=setTimeout(a,100)},g.prototype.resize=function(){this.isResizeBound&&this.needsResizeLayout()&&this.layout()},g.prototype.needsResizeLayout=function(){var a=d(this.element),b=this.size&&a;return b&&a.innerWidth!==this.size.innerWidth},g.prototype.addItems=function(a){var b=this._itemize(a);return b.length&&(this.items=this.items.concat(b)),b},g.prototype.appended=function(a){var b=this.addItems(a);b.length&&(this.layoutItems(b,!0),this.reveal(b))},g.prototype.prepended=function(a){var b=this._itemize(a);if(b.length){var c=this.items.slice(0);this.items=b.concat(c),this._resetLayout(),this._manageStamps(),this.layoutItems(b,!0),this.reveal(b),this.layoutItems(c)}},g.prototype.reveal=function(a){this._emitCompleteOnItems("reveal",a);for(var b=a&&a.length,c=0;b&&b>c;c++){var d=a[c];d.reveal()}},g.prototype.hide=function(a){this._emitCompleteOnItems("hide",a);for(var b=a&&a.length,c=0;b&&b>c;c++){var d=a[c];d.hide()}},g.prototype.revealItemElements=function(a){var b=this.getItems(a);this.reveal(b)},g.prototype.hideItemElements=function(a){var b=this.getItems(a);this.hide(b)},g.prototype.getItem=function(a){for(var b=0,c=this.items.length;c>b;b++){var d=this.items[b];if(d.element===a)return d}},g.prototype.getItems=function(a){a=e.makeArray(a);for(var b=[],c=0,d=a.length;d>c;c++){var f=a[c],g=this.getItem(f);g&&b.push(g)}return b},g.prototype.remove=function(a){var b=this.getItems(a);if(this._emitCompleteOnItems("remove",b),b&&b.length)for(var c=0,d=b.length;d>c;c++){var f=b[c];f.remove(),e.removeFrom(this.items,f)}},g.prototype.destroy=function(){var a=this.element.style;a.height="",a.position="",a.width="";for(var b=0,c=this.items.length;c>b;b++){var d=this.items[b];d.destroy()}this.unbindResize();var e=this.element.outlayerGUID;delete l[e],delete this.element.outlayerGUID,i&&i.removeData(this.element,this.constructor.namespace)},g.data=function(a){a=e.getQueryElement(a);var b=a&&a.outlayerGUID;return b&&l[b]},g.create=function(a,b){function c(){g.apply(this,arguments)}return Object.create?c.prototype=Object.create(g.prototype):e.extend(c.prototype,g.prototype),c.prototype.constructor=c,c.defaults=e.extend({},g.defaults),e.extend(c.defaults,b),c.prototype.settings={},c.namespace=a,c.data=g.data,c.Item=function(){f.apply(this,arguments)},c.Item.prototype=new f,e.htmlInit(c,a),i&&i.bridget&&i.bridget(a,c),c},g.Item=f,g}),function(a,b){"function"==typeof define&&define.amd?define(["outlayer/outlayer","get-size/get-size","fizzy-ui-utils/utils"],b):"object"==typeof exports?module.exports=b(require("outlayer"),require("get-size"),require("fizzy-ui-utils")):a.Masonry=b(a.Outlayer,a.getSize,a.fizzyUIUtils)}(window,function(a,b,c){var d=a.create("masonry");return d.prototype._resetLayout=function(){this.getSize(),this._getMeasurement("columnWidth","outerWidth"),this._getMeasurement("gutter","outerWidth"),this.measureColumns();var a=this.cols;for(this.colYs=[];a--;)this.colYs.push(0);this.maxY=0},d.prototype.measureColumns=function(){if(this.getContainerWidth(),!this.columnWidth){var a=this.items[0],c=a&&a.element;this.columnWidth=c&&b(c).outerWidth||this.containerWidth}var d=this.columnWidth+=this.gutter,e=this.containerWidth+this.gutter,f=e/d,g=d-e%d,h=g&&1>g?"round":"floor";f=Math[h](f),this.cols=Math.max(f,1)},d.prototype.getContainerWidth=function(){var a=this.options.isFitWidth?this.element.parentNode:this.element,c=b(a);this.containerWidth=c&&c.innerWidth},d.prototype._getItemLayoutPosition=function(a){a.getSize();var b=a.size.outerWidth%this.columnWidth,d=b&&1>b?"round":"ceil",e=Math[d](a.size.outerWidth/this.columnWidth);e=Math.min(e,this.cols);for(var f=this._getColGroup(e),g=Math.min.apply(Math,f),h=c.indexOf(f,g),i={x:this.columnWidth*h,y:g},j=g+a.size.outerHeight,k=this.cols+1-f.length,l=0;k>l;l++)this.colYs[h+l]=j;return i},d.prototype._getColGroup=function(a){if(2>a)return this.colYs;for(var b=[],c=this.cols+1-a,d=0;c>d;d++){var e=this.colYs.slice(d,d+a);b[d]=Math.max.apply(Math,e)}return b},d.prototype._manageStamp=function(a){var c=b(a),d=this._getElementOffset(a),e=this.options.isOriginLeft?d.left:d.right,f=e+c.outerWidth,g=Math.floor(e/this.columnWidth);g=Math.max(0,g);var h=Math.floor(f/this.columnWidth);h-=f%this.columnWidth?0:1,h=Math.min(this.cols-1,h);for(var i=(this.options.isOriginTop?d.top:d.bottom)+c.outerHeight,j=g;h>=j;j++)this.colYs[j]=Math.max(i,this.colYs[j])},d.prototype._getContainerSize=function(){this.maxY=Math.max.apply(Math,this.colYs);var a={height:this.maxY};return this.options.isFitWidth&&(a.width=this._getContainerFitWidth()),a},d.prototype._getContainerFitWidth=function(){for(var a=0,b=this.cols;--b&&0===this.colYs[b];)a++;return(this.cols-a)*this.columnWidth-this.gutter},d.prototype.needsResizeLayout=function(){var a=this.containerWidth;return this.getContainerWidth(),a!==this.containerWidth},d});;
+(function ($) {
+
+/**
+ * Toggle the visibility of a fieldset using smooth animations.
+ */
+Drupal.toggleFieldset = function (fieldset) {
+  var $fieldset = $(fieldset);
+  if ($fieldset.is('.collapsed')) {
+    var $content = $('> .fieldset-wrapper', fieldset).hide();
+    $fieldset
+      .removeClass('collapsed')
+      .trigger({ type: 'collapsed', value: false })
+      .find('> legend span.fieldset-legend-prefix').html(Drupal.t('Hide'));
+    $content.slideDown({
+      duration: 'fast',
+      easing: 'linear',
+      complete: function () {
+        Drupal.collapseScrollIntoView(fieldset);
+        fieldset.animating = false;
+      },
+      step: function () {
+        // Scroll the fieldset into view.
+        Drupal.collapseScrollIntoView(fieldset);
+      }
+    });
+  }
+  else {
+    $fieldset.trigger({ type: 'collapsed', value: true });
+    $('> .fieldset-wrapper', fieldset).slideUp('fast', function () {
+      $fieldset
+        .addClass('collapsed')
+        .find('> legend span.fieldset-legend-prefix').html(Drupal.t('Show'));
+      fieldset.animating = false;
+    });
+  }
+};
+
+/**
+ * Scroll a given fieldset into view as much as possible.
+ */
+Drupal.collapseScrollIntoView = function (node) {
+  var h = document.documentElement.clientHeight || document.body.clientHeight || 0;
+  var offset = document.documentElement.scrollTop || document.body.scrollTop || 0;
+  var posY = $(node).offset().top;
+  var fudge = 55;
+  if (posY + node.offsetHeight + fudge > h + offset) {
+    if (node.offsetHeight > h) {
+      window.scrollTo(0, posY);
+    }
+    else {
+      window.scrollTo(0, posY + node.offsetHeight - h + fudge);
+    }
+  }
+};
+
+Drupal.behaviors.collapse = {
+  attach: function (context, settings) {
+    $('fieldset.collapsible', context).once('collapse', function () {
+      var $fieldset = $(this);
+      // Expand fieldset if there are errors inside, or if it contains an
+      // element that is targeted by the URI fragment identifier.
+      var anchor = location.hash && location.hash != '#' ? ', ' + location.hash : '';
+      if ($fieldset.find('.error' + anchor).length) {
+        $fieldset.removeClass('collapsed');
+      }
+
+      var summary = $('<span class="summary"></span>');
+      $fieldset.
+        bind('summaryUpdated', function () {
+          var text = $.trim($fieldset.drupalGetSummary());
+          summary.html(text ? ' (' + text + ')' : '');
+        })
+        .trigger('summaryUpdated');
+
+      // Turn the legend into a clickable link, but retain span.fieldset-legend
+      // for CSS positioning.
+      var $legend = $('> legend .fieldset-legend', this);
+
+      $('<span class="fieldset-legend-prefix element-invisible"></span>')
+        .append($fieldset.hasClass('collapsed') ? Drupal.t('Show') : Drupal.t('Hide'))
+        .prependTo($legend)
+        .after(' ');
+
+      // .wrapInner() does not retain bound events.
+      var $link = $('<a class="fieldset-title" href="#"></a>')
+        .prepend($legend.contents())
+        .appendTo($legend)
+        .click(function () {
+          var fieldset = $fieldset.get(0);
+          // Don't animate multiple times.
+          if (!fieldset.animating) {
+            fieldset.animating = true;
+            Drupal.toggleFieldset(fieldset);
+          }
+          return false;
+        });
+
+      $legend.append(summary);
+    });
+  }
+};
+
+})(jQuery);
+;
+/*!
+ * imagesLoaded PACKAGED v4.1.3
+ * JavaScript is all like "You images are done yet or what?"
+ * MIT License
+ */
+
+!function(e,t){"function"==typeof define&&define.amd?define("ev-emitter/ev-emitter",t):"object"==typeof module&&module.exports?module.exports=t():e.EvEmitter=t()}("undefined"!=typeof window?window:this,function(){function e(){}var t=e.prototype;return t.on=function(e,t){if(e&&t){var i=this._events=this._events||{},n=i[e]=i[e]||[];return n.indexOf(t)==-1&&n.push(t),this}},t.once=function(e,t){if(e&&t){this.on(e,t);var i=this._onceEvents=this._onceEvents||{},n=i[e]=i[e]||{};return n[t]=!0,this}},t.off=function(e,t){var i=this._events&&this._events[e];if(i&&i.length){var n=i.indexOf(t);return n!=-1&&i.splice(n,1),this}},t.emitEvent=function(e,t){var i=this._events&&this._events[e];if(i&&i.length){var n=0,o=i[n];t=t||[];for(var r=this._onceEvents&&this._onceEvents[e];o;){var s=r&&r[o];s&&(this.off(e,o),delete r[o]),o.apply(this,t),n+=s?0:1,o=i[n]}return this}},t.allOff=t.removeAllListeners=function(){delete this._events,delete this._onceEvents},e}),function(e,t){"use strict";"function"==typeof define&&define.amd?define(["ev-emitter/ev-emitter"],function(i){return t(e,i)}):"object"==typeof module&&module.exports?module.exports=t(e,require("ev-emitter")):e.imagesLoaded=t(e,e.EvEmitter)}("undefined"!=typeof window?window:this,function(e,t){function i(e,t){for(var i in t)e[i]=t[i];return e}function n(e){var t=[];if(Array.isArray(e))t=e;else if("number"==typeof e.length)for(var i=0;i<e.length;i++)t.push(e[i]);else t.push(e);return t}function o(e,t,r){return this instanceof o?("string"==typeof e&&(e=document.querySelectorAll(e)),this.elements=n(e),this.options=i({},this.options),"function"==typeof t?r=t:i(this.options,t),r&&this.on("always",r),this.getImages(),h&&(this.jqDeferred=new h.Deferred),void setTimeout(function(){this.check()}.bind(this))):new o(e,t,r)}function r(e){this.img=e}function s(e,t){this.url=e,this.element=t,this.img=new Image}var h=e.jQuery,a=e.console;o.prototype=Object.create(t.prototype),o.prototype.options={},o.prototype.getImages=function(){this.images=[],this.elements.forEach(this.addElementImages,this)},o.prototype.addElementImages=function(e){"IMG"==e.nodeName&&this.addImage(e),this.options.background===!0&&this.addElementBackgroundImages(e);var t=e.nodeType;if(t&&d[t]){for(var i=e.querySelectorAll("img"),n=0;n<i.length;n++){var o=i[n];this.addImage(o)}if("string"==typeof this.options.background){var r=e.querySelectorAll(this.options.background);for(n=0;n<r.length;n++){var s=r[n];this.addElementBackgroundImages(s)}}}};var d={1:!0,9:!0,11:!0};return o.prototype.addElementBackgroundImages=function(e){var t=getComputedStyle(e);if(t)for(var i=/url\((['"])?(.*?)\1\)/gi,n=i.exec(t.backgroundImage);null!==n;){var o=n&&n[2];o&&this.addBackground(o,e),n=i.exec(t.backgroundImage)}},o.prototype.addImage=function(e){var t=new r(e);this.images.push(t)},o.prototype.addBackground=function(e,t){var i=new s(e,t);this.images.push(i)},o.prototype.check=function(){function e(e,i,n){setTimeout(function(){t.progress(e,i,n)})}var t=this;return this.progressedCount=0,this.hasAnyBroken=!1,this.images.length?void this.images.forEach(function(t){t.once("progress",e),t.check()}):void this.complete()},o.prototype.progress=function(e,t,i){this.progressedCount++,this.hasAnyBroken=this.hasAnyBroken||!e.isLoaded,this.emitEvent("progress",[this,e,t]),this.jqDeferred&&this.jqDeferred.notify&&this.jqDeferred.notify(this,e),this.progressedCount==this.images.length&&this.complete(),this.options.debug&&a&&a.log("progress: "+i,e,t)},o.prototype.complete=function(){var e=this.hasAnyBroken?"fail":"done";if(this.isComplete=!0,this.emitEvent(e,[this]),this.emitEvent("always",[this]),this.jqDeferred){var t=this.hasAnyBroken?"reject":"resolve";this.jqDeferred[t](this)}},r.prototype=Object.create(t.prototype),r.prototype.check=function(){var e=this.getIsImageComplete();return e?void this.confirm(0!==this.img.naturalWidth,"naturalWidth"):(this.proxyImage=new Image,this.proxyImage.addEventListener("load",this),this.proxyImage.addEventListener("error",this),this.img.addEventListener("load",this),this.img.addEventListener("error",this),void(this.proxyImage.src=this.img.src))},r.prototype.getIsImageComplete=function(){return this.img.complete&&void 0!==this.img.naturalWidth},r.prototype.confirm=function(e,t){this.isLoaded=e,this.emitEvent("progress",[this,this.img,t])},r.prototype.handleEvent=function(e){var t="on"+e.type;this[t]&&this[t](e)},r.prototype.onload=function(){this.confirm(!0,"onload"),this.unbindEvents()},r.prototype.onerror=function(){this.confirm(!1,"onerror"),this.unbindEvents()},r.prototype.unbindEvents=function(){this.proxyImage.removeEventListener("load",this),this.proxyImage.removeEventListener("error",this),this.img.removeEventListener("load",this),this.img.removeEventListener("error",this)},s.prototype=Object.create(r.prototype),s.prototype.check=function(){this.img.addEventListener("load",this),this.img.addEventListener("error",this),this.img.src=this.url;var e=this.getIsImageComplete();e&&(this.confirm(0!==this.img.naturalWidth,"naturalWidth"),this.unbindEvents())},s.prototype.unbindEvents=function(){this.img.removeEventListener("load",this),this.img.removeEventListener("error",this)},s.prototype.confirm=function(e,t){this.isLoaded=e,this.emitEvent("progress",[this,this.element,t])},o.makeJQueryPlugin=function(t){t=t||e.jQuery,t&&(h=t,h.fn.imagesLoaded=function(e,t){var i=new o(this,e,t);return i.jqDeferred.promise(h(this))})},o.makeJQueryPlugin(),o});;
+/**
+ * @file
+ * Masonry script.
+ */
+
+(function($) {
+
+Drupal.behaviors.masonry = {
+  attach: function(context, settings) {
+
+    // Iterate through all Masonry instances
+    $.each(Drupal.settings.masonry, function (container, settings) {
+      // Set container
+      var $container = $(container);
+
+      // Set options
+      var $options = new Object();
+      if (settings.item_selector) {
+        $options.itemSelector = settings.item_selector;
+      }
+      if (settings.column_width) {
+        if (settings.column_width_units == 'px') {
+          $options.columnWidth = parseInt(settings.column_width);
+        }
+        else if (settings.column_width_units == '%') {
+          $options.columnWidth = ($container.width() * (settings.column_width / 100)) - settings.gutter_width ;
+        }
+        else {
+          $options.columnWidth = settings.column_width;
+      }
+        }
+      if (settings.stamp) {
+        $options.stamp = settings.stamp;
+      }
+      $options.gutter = settings.gutter_width;
+      $options.isResizeBound = settings.resizable;
+      $options.isFitWidth = settings.fit_width;
+      if (settings.rtl) {
+        $options.isOriginLeft = false;
+      }
+      if (settings.animated) {
+        $options.transitionDuration = settings.animation_duration + 'ms';
+      }
+      else {
+        $options.transitionDuration = 0;
+      }
+
+      // Apply Masonry to container
+      if (settings.images_first) {
+        $container.imagesLoaded(function () {
+          if ($container.hasClass('masonry-processed')) {
+            $container.masonry('reloadItems').masonry('layout');
+          }
+          else {
+            $container.once('masonry').masonry($options);
+          }
+        });
+      }
+      else {
+        if ($container.hasClass('masonry-processed')) {
+          $container.masonry('reloadItems').masonry('layout');
+        }
+        else {
+          $container.once('masonry').masonry($options);
+        }
+      }
+    });
+  }
+};
+})(jQuery);
+;
+/**
+ *  @file
+ *  A simple jQuery Cycle Div Slideshow Rotator.
+ */
+
+/**
+ * This will set our initial behavior, by starting up each individual slideshow.
+ */
+(function ($) {
+  Drupal.behaviors.viewsSlideshowCycle = {
+    attach: function (context) {
+      $('.views_slideshow_cycle_main:not(.viewsSlideshowCycle-processed)', context).addClass('viewsSlideshowCycle-processed').each(function() {
+        var fullId = '#' + $(this).attr('id');
+        var settings = Drupal.settings.viewsSlideshowCycle[fullId];
+        settings.targetId = '#' + $(fullId + " :first").attr('id');
+
+        settings.slideshowId = settings.targetId.replace('#views_slideshow_cycle_teaser_section_', '');
+        // Pager after function.
+        var pager_after_fn = function(curr, next, opts) {
+          // Need to do some special handling on first load.
+          var slideNum = opts.currSlide;
+          if (typeof settings.processedAfter == 'undefined' || !settings.processedAfter) {
+            settings.processedAfter = 1;
+            slideNum = (typeof settings.opts.startingSlide == 'undefined') ? 0 : settings.opts.startingSlide;
+          }
+          if (settings.pause_after_slideshow) {
+            opts.counter += 1;
+            if (opts.counter == settings.num_divs + 1) {
+              opts.counter = 1;
+              Drupal.viewsSlideshow.action({ "action": 'pause', "slideshowID": settings.slideshowId, "force": true });
+            }
+          }
+          Drupal.viewsSlideshow.action({ "action": 'transitionEnd', "slideshowID": settings.slideshowId, "slideNum": slideNum });
+        }
+        // Pager before function.
+        var pager_before_fn = function(curr, next, opts) {
+          $(document).trigger('drupal:views_slideshow_cycle:before', {
+            curr: curr, next: next, opts: opts, settings: settings
+          });
+
+          var slideNum = opts.nextSlide;
+
+          // Remember last slide.
+          if (settings.remember_slide) {
+            createCookie(settings.vss_id, slideNum, settings.remember_slide_days);
+          }
+
+          // Make variable height.
+          if (!settings.fixed_height) {
+            //get the height of the current slide
+            var $ht = $(next).height();
+            //set the container's height to that of the current slide
+            $(next).parent().animate({height: $ht});
+          }
+
+          // Need to do some special handling on first load.
+          if (typeof settings.processedBefore == 'undefined' || !settings.processedBefore) {
+            settings.processedBefore = 1;
+            slideNum = (typeof opts.startingSlide == 'undefined') ? 0 : opts.startingSlide;
+          }
+
+          Drupal.viewsSlideshow.action({ "action": 'transitionBegin', "slideshowID": settings.slideshowId, "slideNum": slideNum });
+        }
+        settings.loaded = false;
+
+        settings.opts = {
+          speed:settings.speed,
+          timeout:settings.timeout,
+          delay:settings.delay,
+          sync:settings.sync,
+          random:settings.random,
+          nowrap:settings.nowrap,
+          pause_after_slideshow:settings.pause_after_slideshow,
+          counter:0,
+          after:pager_after_fn,
+          before:pager_before_fn,
+          cleartype:(settings.cleartype)? true : false,
+          cleartypeNoBg:(settings.cleartypenobg)? true : false
+        }
+
+        // Set the starting slide if we are supposed to remember the slide
+        if (settings.remember_slide) {
+          var startSlide = readCookie(settings.vss_id);
+          if (startSlide == null) {
+            startSlide = 0;
+          }
+          settings.opts.startingSlide = parseInt(startSlide);
+        }
+
+        if (settings.effect == 'none') {
+          settings.opts.speed = 1;
+        }
+        else {
+          settings.opts.fx = settings.effect;
+        }
+
+        // Take starting item from fragment.
+        var hash = location.hash;
+        if (hash) {
+          var hash = hash.replace('#', '');
+          var aHash = hash.split(';');
+          var aHashLen = aHash.length;
+
+          // Loop through all the possible starting points.
+          for (var i = 0; i < aHashLen; i++) {
+            // Split the hash into two parts. One part is the slideshow id the
+            // other is the slide number.
+            var initialInfo = aHash[i].split(':');
+            // The id in the hash should match our slideshow.
+            // The slide number chosen shouldn't be larger than the number of
+            // slides we have.
+            if (settings.slideshowId == initialInfo[0] && settings.num_divs > initialInfo[1]) {
+              settings.opts.startingSlide = parseInt(initialInfo[1]);
+            }
+          }
+        }
+
+        // Pause on hover.
+        if (settings.pause) {
+          var mouseIn = function() {
+            Drupal.viewsSlideshow.action({ "action": 'pause', "slideshowID": settings.slideshowId });
+          }
+
+          var mouseOut = function() {
+            Drupal.viewsSlideshow.action({ "action": 'play', "slideshowID": settings.slideshowId });
+          }
+
+          if (jQuery.fn.hoverIntent) {
+            $('#views_slideshow_cycle_teaser_section_' + settings.vss_id).hoverIntent(mouseIn, mouseOut);
+          }
+          else {
+            $('#views_slideshow_cycle_teaser_section_' + settings.vss_id).hover(mouseIn, mouseOut);
+          }
+        }
+
+        // Play on hover.
+        if (settings.play_on_hover) {
+          var mouseIn = function() {
+            Drupal.viewsSlideshow.action({ "action": 'play', "slideshowID": settings.slideshowId, "force": true });
+          }
+
+          var mouseOut = function() {
+            Drupal.viewsSlideshow.action({ "action": 'pause', "slideshowID": settings.slideshowId });
+          }
+
+          if (jQuery.fn.hoverIntent) {
+            $('#views_slideshow_cycle_teaser_section_' + settings.vss_id).hoverIntent(mouseIn, mouseOut);
+          }
+          else {
+            $('#views_slideshow_cycle_teaser_section_' + settings.vss_id).hover(mouseIn, mouseOut);
+          }
+        }
+
+        // Pause on clicking of the slide.
+        if (settings.pause_on_click) {
+          $('#views_slideshow_cycle_teaser_section_' + settings.vss_id).click(function() {
+            Drupal.viewsSlideshow.action({ "action": 'pause', "slideshowID": settings.slideshowId, "force": true });
+          });
+        }
+
+        if (typeof JSON != 'undefined') {
+          var advancedOptions = JSON.parse(settings.advanced_options);
+          for (var option in advancedOptions) {
+            switch(option) {
+
+              // Standard Options
+              case "activePagerClass":
+              case "allowPagerClickBubble":
+              case "autostop":
+              case "autostopCount":
+              case "backwards":
+              case "bounce":
+              case "cleartype":
+              case "cleartypeNoBg":
+              case "containerResize":
+              case "continuous":
+              case "delay":
+              case "easeIn":
+              case "easeOut":
+              case "easing":
+              case "fastOnEvent":
+              case "fit":
+              case "fx":
+              case "manualTrump":
+              case "metaAttr":
+              case "next":
+              case "nowrap":
+              case "pager":
+              case "pagerEvent":
+              case "pause":
+              case "pauseOnPagerHover":
+              case "prev":
+              case "prevNextEvent":
+              case "random":
+              case "randomizeEffects":
+              case "requeueOnImageNotLoaded":
+              case "requeueTimeout":
+              case "rev":
+              case "slideExpr":
+              case "slideResize":
+              case "speed":
+              case "speedIn":
+              case "speedOut":
+              case "startingSlide":
+              case "sync":
+              case "timeout":
+                var optionValue = advancedOptions[option];
+                optionValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(optionValue);
+                settings.opts[option] = optionValue;
+                break;
+
+              // If width is set we need to disable resizing.
+              case "width":
+                var optionValue = advancedOptions["width"];
+                optionValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(optionValue);
+                settings.opts["width"] = optionValue;
+                settings.opts["containerResize"] = 0;
+                break;
+
+              // If height is set we need to set fixed_height to true.
+              case "height":
+                var optionValue = advancedOptions["height"];
+                optionValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(optionValue);
+                settings.opts["height"] = optionValue;
+                settings.fixed_height = 1;
+                break;
+
+              // These process options that look like {top:50, bottom:20}
+              case "animIn":
+              case "animInDelay":
+              case "animOut":
+              case "animOutDelay":
+              case "cssBefore":
+              case "cssAfter":
+              case "shuffle":
+                var cssValue = advancedOptions[option];
+                cssValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(cssValue);
+                settings.opts[option] = eval('(' + cssValue + ')');
+                break;
+
+              // These options have their own functions.
+              case "after":
+                var afterValue = advancedOptions[option];
+                afterValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(afterValue);
+                // transition callback (scope set to element that was shown): function(currSlideElement, nextSlideElement, options, forwardFlag)
+                settings.opts[option] = function(currSlideElement, nextSlideElement, options, forwardFlag) {
+                  pager_after_fn(currSlideElement, nextSlideElement, options);
+                  eval(afterValue);
+                }
+                break;
+
+              case "before":
+                var beforeValue = advancedOptions[option];
+                beforeValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(beforeValue);
+                // transition callback (scope set to element to be shown):     function(currSlideElement, nextSlideElement, options, forwardFlag)
+                settings.opts[option] = function(currSlideElement, nextSlideElement, options, forwardFlag) {
+                  pager_before_fn(currSlideElement, nextSlideElement, options);
+                  eval(beforeValue);
+                }
+                break;
+
+              case "end":
+                var endValue = advancedOptions[option];
+                endValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(endValue);
+                // callback invoked when the slideshow terminates (use with autostop or nowrap options): function(options)
+                settings.opts[option] = function(options) {
+                  eval(endValue);
+                }
+                break;
+
+              case "fxFn":
+                var fxFnValue = advancedOptions[option];
+                fxFnValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(fxFnValue);
+                // function used to control the transition: function(currSlideElement, nextSlideElement, options, afterCalback, forwardFlag)
+                settings.opts[option] = function(currSlideElement, nextSlideElement, options, afterCalback, forwardFlag) {
+                  eval(fxFnValue);
+                }
+                break;
+
+              case "onPagerEvent":
+                var onPagerEventValue = advancedOptions[option];
+                onPagerEventValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(onPagerEventValue);
+                settings.opts[option] = function(zeroBasedSlideIndex, slideElement) {
+                  eval(onPagerEventValue);
+                }
+                break;
+
+              case "onPrevNextEvent":
+                var onPrevNextEventValue = advancedOptions[option];
+                onPrevNextEventValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(onPrevNextEventValue);
+                settings.opts[option] = function(isNext, zeroBasedSlideIndex, slideElement) {
+                  eval(onPrevNextEventValue);
+                }
+                break;
+
+              case "pagerAnchorBuilder":
+                var pagerAnchorBuilderValue = advancedOptions[option];
+                pagerAnchorBuilderValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(pagerAnchorBuilderValue);
+                // callback fn for building anchor links:  function(index, DOMelement)
+                settings.opts[option] = function(index, DOMelement) {
+                  var returnVal = '';
+                  eval(pagerAnchorBuilderValue);
+                  return returnVal;
+                }
+                break;
+
+              case "pagerClick":
+                var pagerClickValue = advancedOptions[option];
+                pagerClickValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(pagerClickValue);
+                // callback fn for pager clicks:    function(zeroBasedSlideIndex, slideElement)
+                settings.opts[option] = function(zeroBasedSlideIndex, slideElement) {
+                  eval(pagerClickValue);
+                }
+                break;
+
+              case "paused":
+                var pausedValue = advancedOptions[option];
+                pausedValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(pausedValue);
+                // undocumented callback when slideshow is paused:    function(cont, opts, byHover)
+                settings.opts[option] = function(cont, opts, byHover) {
+                  eval(pausedValue);
+                }
+                break;
+
+              case "resumed":
+                var resumedValue = advancedOptions[option];
+                resumedValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(resumedValue);
+                // undocumented callback when slideshow is resumed:    function(cont, opts, byHover)
+                settings.opts[option] = function(cont, opts, byHover) {
+                  eval(resumedValue);
+                }
+                break;
+
+              case "timeoutFn":
+                var timeoutFnValue = advancedOptions[option];
+                timeoutFnValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(timeoutFnValue);
+                settings.opts[option] = function(currSlideElement, nextSlideElement, options, forwardFlag) {
+                  // Set a sane return value unless function overrides it.
+                  var returnVal = settings.timeout;
+                  eval(timeoutFnValue);
+                  return returnVal;
+                }
+                break;
+
+              case "updateActivePagerLink":
+                var updateActivePagerLinkValue = advancedOptions[option];
+                updateActivePagerLinkValue = Drupal.viewsSlideshowCycle.advancedOptionCleanup(updateActivePagerLinkValue);
+                // callback fn invoked to update the active pager link (adds/removes activePagerClass style)
+                settings.opts[option] = function(pager, currSlideIndex) {
+                  eval(updateActivePagerLinkValue);
+                }
+                break;
+            }
+          }
+        }
+
+        // If selected wait for the images to be loaded.
+        // otherwise just load the slideshow.
+        if (settings.wait_for_image_load) {
+          // For IE/Chrome/Opera we if there are images then we need to make
+          // sure the images are loaded before starting the slideshow.
+          settings.totalImages = $(settings.targetId + ' img').length;
+          if (settings.totalImages) {
+            settings.loadedImages = 0;
+
+            // Add a load event for each image.
+            $(settings.targetId + ' img').each(function() {
+              var $imageElement = $(this);
+              $imageElement.bind('load', function () {
+                Drupal.viewsSlideshowCycle.imageWait(fullId);
+              });
+
+              // Removing the source and adding it again will fire the load event.
+              var imgSrc = $imageElement.attr('src');
+              $imageElement.attr('src', '');
+              $imageElement.attr('src', imgSrc);
+            });
+
+            // We need to set a timeout so that the slideshow doesn't wait
+            // indefinitely for all images to load.
+            setTimeout("Drupal.viewsSlideshowCycle.load('" + fullId + "')", settings.wait_for_image_load_timeout);
+          }
+          else {
+            Drupal.viewsSlideshowCycle.load(fullId);
+          }
+        }
+        else {
+          Drupal.viewsSlideshowCycle.load(fullId);
+        }
+      });
+    }
+  };
+
+  /**
+   * Views Slideshow swipe support.
+   */
+  Drupal.behaviors.viewsSlideshowSwipe = {
+    attach: function (context) {
+      var isTouch = (('ontouchstart' in window) || (navigator.msMaxTouchPoints > 0));
+      if (isTouch === true && $('.views-slideshow-cycle-main-frame').length) {
+        var $slider = $('.views-slideshow-cycle-main-frame'),
+          opts = {
+            start: {x: 0, y: 0},
+            end: {x: 0, y: 0},
+            hdiff: 0,
+            vdiff: 0,
+            length: 0,
+            angle: null,
+            direction: null,
+          },
+          optsReset = $.extend(true, {}, opts),
+         H_THRESHOLD =  110, // roughly one inch effective resolution on ipad
+         V_THRESHOLD = 50;
+        $slider.data('bw', opts)
+        .bind('touchstart.cycle', function (e) {
+          var touch = e.originalEvent.touches[0] || e.originalEvent.changedTouches[0];
+          if (e.originalEvent.touches.length == 1) {
+            var data = $(this).data('bw');
+            data.start.x = touch.pageX;
+            data.start.y = touch.pageY;
+            $(this).data('bw', data);
+          }
+        })
+        .bind('touchend.cycle', function (e) {
+          var touch = e.originalEvent.touches[0] || e.originalEvent.changedTouches[0];
+          var data = $(this).data('bw');
+          data.end.x = touch.pageX;
+          data.end.y = touch.pageY;
+          $(this).data('bw', data);
+          if (data.start.x != 0 && data.start.y != 0) {
+            data.vdiff = data.start.x - data.end.x;
+            data.hdiff = data.end.y - data.start.y;
+            if (Math.abs(data.vdiff) == data.start.x && Math.abs(data.hdiff) == data.start.y) {
+              data.vdiff = 0;
+              data.hdiff = 0;
+            }
+            var length = Math.round(Math.sqrt(Math.pow(data.vdiff,2) + Math.pow(data.hdiff,2)));
+            var rads = Math.atan2(data.hdiff, data.vdiff);
+            var angle = Math.round(rads*180/Math.PI);
+            if (angle < 0) { angle = 360 - Math.abs(angle); }
+            if (length > H_THRESHOLD && V_THRESHOLD > data.hdiff) {
+              e.preventDefault();
+              if (angle > 135 && angle < 225) {
+                var cyopt = $slider.data('cycle.opts');
+                if (cyopt.currSlide > 0) {
+                  $slider.cycle((cyopt.currSlide - 1), 'scrollRight');
+                }
+                else {
+                   $slider.cycle((cyopt.slideCount - 1), 'scrollRight');
+                }
+              }
+              else if (angle > 315 || angle < 45) {
+                $slider.cycle('next');
+              }
+            }
+          }
+          data = $.extend(true, {}, optsReset);
+        });
+      }
+    }
+  };
+
+  Drupal.viewsSlideshowCycle = Drupal.viewsSlideshowCycle || {};
+
+  // Cleanup the values of advanced options.
+  Drupal.viewsSlideshowCycle.advancedOptionCleanup = function(value) {
+    value = $.trim(value);
+    value = value.replace(/\n/g, '');
+    if (value.match(/^[\d.]+%$/)) {
+      // noop
+    }
+    else if (!isNaN(parseInt(value))) {
+      value = parseInt(value);
+    }
+    else if (value.toLowerCase() == 'true') {
+      value = true;
+    }
+    else if (value.toLowerCase() == 'false') {
+      value = false;
+    }
+
+    return value;
+  }
+
+  // This checks to see if all the images have been loaded.
+  // If they have then it starts the slideshow.
+  Drupal.viewsSlideshowCycle.imageWait = function(fullId) {
+    if (++Drupal.settings.viewsSlideshowCycle[fullId].loadedImages == Drupal.settings.viewsSlideshowCycle[fullId].totalImages) {
+      Drupal.viewsSlideshowCycle.load(fullId);
+    }
+  };
+
+  // Start the slideshow.
+  Drupal.viewsSlideshowCycle.load = function (fullId) {
+    var settings = Drupal.settings.viewsSlideshowCycle[fullId];
+
+    // Make sure the slideshow isn't already loaded.
+    if (!settings.loaded) {
+      $(settings.targetId).cycle(settings.opts);
+      $(settings.targetId).parent().parent().addClass('views-slideshow-cycle-processed');
+      settings.loaded = true;
+
+      // Start Paused
+      if (settings.start_paused) {
+        Drupal.viewsSlideshow.action({ "action": 'pause', "slideshowID": settings.slideshowId, "force": true });
+      }
+
+      // Pause if hidden.
+      if (settings.pause_when_hidden) {
+        var checkPause = function(settings) {
+          // If the slideshow is visible and it is paused then resume.
+          // otherwise if the slideshow is not visible and it is not paused then
+          // pause it.
+          var visible = viewsSlideshowCycleIsVisible(settings.targetId, settings.pause_when_hidden_type, settings.amount_allowed_visible);
+          if (visible) {
+            Drupal.viewsSlideshow.action({ "action": 'play', "slideshowID": settings.slideshowId });
+          }
+          else {
+            Drupal.viewsSlideshow.action({ "action": 'pause', "slideshowID": settings.slideshowId });
+          }
+        }
+
+        // Check when scrolled.
+        $(window).scroll(function() {
+         checkPause(settings);
+        });
+
+        // Check when the window is resized.
+        $(window).resize(function() {
+          checkPause(settings);
+        });
+      }
+    }
+  };
+
+  Drupal.viewsSlideshowCycle.pause = function (options) {
+    //Eat TypeError, cycle doesn't handle pause well if options isn't defined.
+    try{
+      if (options.pause_in_middle && $.fn.pause) {
+        $('#views_slideshow_cycle_teaser_section_' + options.slideshowID).pause();
+      }
+      else {
+        $('#views_slideshow_cycle_teaser_section_' + options.slideshowID).cycle('pause');
+      }
+    }
+    catch(e){
+      if(!e instanceof TypeError){
+        throw e;
+      }
+    }
+  };
+
+  Drupal.viewsSlideshowCycle.play = function (options) {
+    Drupal.settings.viewsSlideshowCycle['#views_slideshow_cycle_main_' + options.slideshowID].paused = false;
+    if (options.pause_in_middle && $.fn.resume) {
+      $('#views_slideshow_cycle_teaser_section_' + options.slideshowID).resume();
+    }
+    else {
+      $('#views_slideshow_cycle_teaser_section_' + options.slideshowID).cycle('resume');
+    }
+  };
+
+  Drupal.viewsSlideshowCycle.previousSlide = function (options) {
+    $('#views_slideshow_cycle_teaser_section_' + options.slideshowID).cycle('prev');
+  };
+
+  Drupal.viewsSlideshowCycle.nextSlide = function (options) {
+    $('#views_slideshow_cycle_teaser_section_' + options.slideshowID).cycle('next');
+  };
+
+  Drupal.viewsSlideshowCycle.goToSlide = function (options) {
+    $('#views_slideshow_cycle_teaser_section_' + options.slideshowID).cycle(options.slideNum);
+  };
+
+  // Verify that the value is a number.
+  function IsNumeric(sText) {
+    var ValidChars = "0123456789";
+    var IsNumber=true;
+    var Char;
+
+    for (var i=0; i < sText.length && IsNumber == true; i++) {
+      Char = sText.charAt(i);
+      if (ValidChars.indexOf(Char) == -1) {
+        IsNumber = false;
+      }
+    }
+    return IsNumber;
+  }
+
+  /**
+   * Cookie Handling Functions
+   */
+  function createCookie(name,value,days) {
+    if (days) {
+      var date = new Date();
+      date.setTime(date.getTime()+(days*24*60*60*1000));
+      var expires = "; expires="+date.toGMTString();
+    }
+    else {
+      var expires = "";
+    }
+    document.cookie = name+"="+value+expires+"; path=/";
+  }
+
+  function readCookie(name) {
+    var nameEQ = name + "=";
+    var ca = document.cookie.split(';');
+    for(var i=0;i < ca.length;i++) {
+      var c = ca[i];
+      while (c.charAt(0)==' ') c = c.substring(1,c.length);
+      if (c.indexOf(nameEQ) == 0) {
+        return c.substring(nameEQ.length,c.length);
+      }
+    }
+    return null;
+  }
+
+  function eraseCookie(name) {
+    createCookie(name,"",-1);
+  }
+
+  /**
+   * Checks to see if the slide is visible enough.
+   * elem = element to check.
+   * type = The way to calculate how much is visible.
+   * amountVisible = amount that should be visible. Either in percent or px. If
+   *                it's not defined then all of the slide must be visible.
+   *
+   * Returns true or false
+   */
+  function viewsSlideshowCycleIsVisible(elem, type, amountVisible) {
+    // Get the top and bottom of the window;
+    var docViewTop = $(window).scrollTop();
+    var docViewBottom = docViewTop + $(window).height();
+    var docViewLeft = $(window).scrollLeft();
+    var docViewRight = docViewLeft + $(window).width();
+
+    // Get the top, bottom, and height of the slide;
+    var elemTop = $(elem).offset().top;
+    var elemHeight = $(elem).height();
+    var elemBottom = elemTop + elemHeight;
+    var elemLeft = $(elem).offset().left;
+    var elemWidth = $(elem).width();
+    var elemRight = elemLeft + elemWidth;
+    var elemArea = elemHeight * elemWidth;
+
+    // Calculate what's hiding in the slide.
+    var missingLeft = 0;
+    var missingRight = 0;
+    var missingTop = 0;
+    var missingBottom = 0;
+
+    // Find out how much of the slide is missing from the left.
+    if (elemLeft < docViewLeft) {
+      missingLeft = docViewLeft - elemLeft;
+    }
+
+    // Find out how much of the slide is missing from the right.
+    if (elemRight > docViewRight) {
+      missingRight = elemRight - docViewRight;
+    }
+
+    // Find out how much of the slide is missing from the top.
+    if (elemTop < docViewTop) {
+      missingTop = docViewTop - elemTop;
+    }
+
+    // Find out how much of the slide is missing from the bottom.
+    if (elemBottom > docViewBottom) {
+      missingBottom = elemBottom - docViewBottom;
+    }
+
+    // If there is no amountVisible defined then check to see if the whole slide
+    // is visible.
+    if (type == 'full') {
+      return ((elemBottom >= docViewTop) && (elemTop <= docViewBottom)
+      && (elemBottom <= docViewBottom) &&  (elemTop >= docViewTop)
+      && (elemLeft >= docViewLeft) && (elemRight <= docViewRight)
+      && (elemLeft <= docViewRight) && (elemRight >= docViewLeft));
+    }
+    else if(type == 'vertical') {
+      var verticalShowing = elemHeight - missingTop - missingBottom;
+
+      // If user specified a percentage then find out if the current shown percent
+      // is larger than the allowed percent.
+      // Otherwise check to see if the amount of px shown is larger than the
+      // allotted amount.
+      if (typeof amountVisible === 'string' && amountVisible.indexOf('%')) {
+        return (((verticalShowing/elemHeight)*100) >= parseInt(amountVisible));
+      }
+      else {
+        return (verticalShowing >= parseInt(amountVisible));
+      }
+    }
+    else if(type == 'horizontal') {
+      var horizontalShowing = elemWidth - missingLeft - missingRight;
+
+      // If user specified a percentage then find out if the current shown percent
+      // is larger than the allowed percent.
+      // Otherwise check to see if the amount of px shown is larger than the
+      // allotted amount.
+      if (typeof amountVisible === 'string' && amountVisible.indexOf('%')) {
+        return (((horizontalShowing/elemWidth)*100) >= parseInt(amountVisible));
+      }
+      else {
+        return (horizontalShowing >= parseInt(amountVisible));
+      }
+    }
+    else if(type == 'area') {
+      var areaShowing = (elemWidth - missingLeft - missingRight) * (elemHeight - missingTop - missingBottom);
+
+      // If user specified a percentage then find out if the current shown percent
+      // is larger than the allowed percent.
+      // Otherwise check to see if the amount of px shown is larger than the
+      // allotted amount.
+      if (typeof amountVisible === 'string' && amountVisible.indexOf('%')) {
+        return (((areaShowing/elemArea)*100) >= parseInt(amountVisible));
+      }
+      else {
+        return (areaShowing >= parseInt(amountVisible));
+      }
+    }
+  }
+})(jQuery);
+;
+/*
+ * jQuery Cycle Plugin (with Transition Definitions)
+ * Examples and documentation at: http://jquery.malsup.com/cycle/
+ * Copyright (c) 2007-2010 M. Alsup
+ * Version: 2.99 (12-MAR-2011)
+ * Dual licensed under the MIT and GPL licenses.
+ * http://jquery.malsup.com/license.html
+ * Requires: jQuery v1.3.2 or later
+ */
+(function($){var ver="2.99";if($.support==undefined){$.support={opacity:!($.browser.msie)};}function debug(s){$.fn.cycle.debug&&log(s);}function log(){window.console&&console.log&&console.log("[cycle] "+Array.prototype.join.call(arguments," "));}$.expr[":"].paused=function(el){return el.cyclePause;};$.fn.cycle=function(options,arg2){var o={s:this.selector,c:this.context};if(this.length===0&&options!="stop"){if(!$.isReady&&o.s){log("DOM not ready, queuing slideshow");$(function(){$(o.s,o.c).cycle(options,arg2);});return this;}log("terminating; zero elements found by selector"+($.isReady?"":" (DOM not ready)"));return this;}return this.each(function(){var opts=handleArguments(this,options,arg2);if(opts===false){return;}opts.updateActivePagerLink=opts.updateActivePagerLink||$.fn.cycle.updateActivePagerLink;if(this.cycleTimeout){clearTimeout(this.cycleTimeout);}this.cycleTimeout=this.cyclePause=0;var $cont=$(this);var $slides=opts.slideExpr?$(opts.slideExpr,this):$cont.children();var els=$slides.get();if(els.length<2){log("terminating; too few slides: "+els.length);return;}var opts2=buildOptions($cont,$slides,els,opts,o);if(opts2===false){return;}var startTime=opts2.continuous?10:getTimeout(els[opts2.currSlide],els[opts2.nextSlide],opts2,!opts2.backwards);if(startTime){startTime+=(opts2.delay||0);if(startTime<10){startTime=10;}debug("first timeout: "+startTime);this.cycleTimeout=setTimeout(function(){go(els,opts2,0,!opts.backwards);},startTime);}});};function handleArguments(cont,options,arg2){if(cont.cycleStop==undefined){cont.cycleStop=0;}if(options===undefined||options===null){options={};}if(options.constructor==String){switch(options){case"destroy":case"stop":var opts=$(cont).data("cycle.opts");if(!opts){return false;}cont.cycleStop++;if(cont.cycleTimeout){clearTimeout(cont.cycleTimeout);}cont.cycleTimeout=0;$(cont).removeData("cycle.opts");if(options=="destroy"){destroy(opts);}return false;case"toggle":cont.cyclePause=(cont.cyclePause===1)?0:1;checkInstantResume(cont.cyclePause,arg2,cont);return false;case"pause":cont.cyclePause=1;return false;case"resume":cont.cyclePause=0;checkInstantResume(false,arg2,cont);return false;case"prev":case"next":var opts=$(cont).data("cycle.opts");if(!opts){log('options not found, "prev/next" ignored');return false;}$.fn.cycle[options](opts);return false;default:options={fx:options};}return options;}else{if(options.constructor==Number){var num=options;options=$(cont).data("cycle.opts");if(!options){log("options not found, can not advance slide");return false;}if(num<0||num>=options.elements.length){log("invalid slide index: "+num);return false;}options.nextSlide=num;if(cont.cycleTimeout){clearTimeout(cont.cycleTimeout);cont.cycleTimeout=0;}if(typeof arg2=="string"){options.oneTimeFx=arg2;}go(options.elements,options,1,num>=options.currSlide);return false;}}return options;function checkInstantResume(isPaused,arg2,cont){if(!isPaused&&arg2===true){var options=$(cont).data("cycle.opts");if(!options){log("options not found, can not resume");return false;}if(cont.cycleTimeout){clearTimeout(cont.cycleTimeout);cont.cycleTimeout=0;}go(options.elements,options,1,!options.backwards);}}}function removeFilter(el,opts){if(!$.support.opacity&&opts.cleartype&&el.style.filter){try{el.style.removeAttribute("filter");}catch(smother){}}}function destroy(opts){if(opts.next){$(opts.next).unbind(opts.prevNextEvent);}if(opts.prev){$(opts.prev).unbind(opts.prevNextEvent);}if(opts.pager||opts.pagerAnchorBuilder){$.each(opts.pagerAnchors||[],function(){this.unbind().remove();});}opts.pagerAnchors=null;if(opts.destroy){opts.destroy(opts);}}function buildOptions($cont,$slides,els,options,o){var opts=$.extend({},$.fn.cycle.defaults,options||{},$.metadata?$cont.metadata():$.meta?$cont.data():{});if(opts.autostop){opts.countdown=opts.autostopCount||els.length;}var cont=$cont[0];$cont.data("cycle.opts",opts);opts.$cont=$cont;opts.stopCount=cont.cycleStop;opts.elements=els;opts.before=opts.before?[opts.before]:[];opts.after=opts.after?[opts.after]:[];if(!$.support.opacity&&opts.cleartype){opts.after.push(function(){removeFilter(this,opts);});}if(opts.continuous){opts.after.push(function(){go(els,opts,0,!opts.backwards);});}saveOriginalOpts(opts);if(!$.support.opacity&&opts.cleartype&&!opts.cleartypeNoBg){clearTypeFix($slides);}if($cont.css("position")=="static"){$cont.css("position","relative");}if(opts.width){$cont.width(opts.width);}if(opts.height&&opts.height!="auto"){$cont.height(opts.height);}if(opts.startingSlide){opts.startingSlide=parseInt(opts.startingSlide);}else{if(opts.backwards){opts.startingSlide=els.length-1;}}if(opts.random){opts.randomMap=[];for(var i=0;i<els.length;i++){opts.randomMap.push(i);}opts.randomMap.sort(function(a,b){return Math.random()-0.5;});opts.randomIndex=1;opts.startingSlide=opts.randomMap[1];}else{if(opts.startingSlide>=els.length){opts.startingSlide=0;}}opts.currSlide=opts.startingSlide||0;var first=opts.startingSlide;$slides.css({position:"absolute",top:0,left:0}).hide().each(function(i){var z;if(opts.backwards){z=first?i<=first?els.length+(i-first):first-i:els.length-i;}else{z=first?i>=first?els.length-(i-first):first-i:els.length-i;}$(this).css("z-index",z);});$(els[first]).css("opacity",1).show();removeFilter(els[first],opts);if(opts.fit&&opts.width){$slides.width(opts.width);}if(opts.fit&&opts.height&&opts.height!="auto"){$slides.height(opts.height);}var reshape=opts.containerResize&&!$cont.innerHeight();if(reshape){var maxw=0,maxh=0;for(var j=0;j<els.length;j++){var $e=$(els[j]),e=$e[0],w=$e.outerWidth(),h=$e.outerHeight();if(!w){w=e.offsetWidth||e.width||$e.attr("width");}if(!h){h=e.offsetHeight||e.height||$e.attr("height");}maxw=w>maxw?w:maxw;maxh=h>maxh?h:maxh;}if(maxw>0&&maxh>0){$cont.css({width:maxw+"px",height:maxh+"px"});}}if(opts.pause){$cont.hover(function(){this.cyclePause++;},function(){this.cyclePause--;});}if(supportMultiTransitions(opts)===false){return false;}var requeue=false;options.requeueAttempts=options.requeueAttempts||0;$slides.each(function(){var $el=$(this);this.cycleH=(opts.fit&&opts.height)?opts.height:($el.height()||this.offsetHeight||this.height||$el.attr("height")||0);this.cycleW=(opts.fit&&opts.width)?opts.width:($el.width()||this.offsetWidth||this.width||$el.attr("width")||0);if($el.is("img")){var loadingIE=($.browser.msie&&this.cycleW==28&&this.cycleH==30&&!this.complete);var loadingFF=($.browser.mozilla&&this.cycleW==34&&this.cycleH==19&&!this.complete);var loadingOp=($.browser.opera&&((this.cycleW==42&&this.cycleH==19)||(this.cycleW==37&&this.cycleH==17))&&!this.complete);var loadingOther=(this.cycleH==0&&this.cycleW==0&&!this.complete);if(loadingIE||loadingFF||loadingOp||loadingOther){if(o.s&&opts.requeueOnImageNotLoaded&&++options.requeueAttempts<100){log(options.requeueAttempts," - img slide not loaded, requeuing slideshow: ",this.src,this.cycleW,this.cycleH);setTimeout(function(){$(o.s,o.c).cycle(options);},opts.requeueTimeout);requeue=true;return false;}else{log("could not determine size of image: "+this.src,this.cycleW,this.cycleH);}}}return true;});if(requeue){return false;}opts.cssBefore=opts.cssBefore||{};opts.cssAfter=opts.cssAfter||{};opts.cssFirst=opts.cssFirst||{};opts.animIn=opts.animIn||{};opts.animOut=opts.animOut||{};$slides.not(":eq("+first+")").css(opts.cssBefore);$($slides[first]).css(opts.cssFirst);if(opts.timeout){opts.timeout=parseInt(opts.timeout);if(opts.speed.constructor==String){opts.speed=$.fx.speeds[opts.speed]||parseInt(opts.speed);}if(!opts.sync){opts.speed=opts.speed/2;}var buffer=opts.fx=="none"?0:opts.fx=="shuffle"?500:250;while((opts.timeout-opts.speed)<buffer){opts.timeout+=opts.speed;}}if(opts.easing){opts.easeIn=opts.easeOut=opts.easing;}if(!opts.speedIn){opts.speedIn=opts.speed;}if(!opts.speedOut){opts.speedOut=opts.speed;}opts.slideCount=els.length;opts.currSlide=opts.lastSlide=first;if(opts.random){if(++opts.randomIndex==els.length){opts.randomIndex=0;}opts.nextSlide=opts.randomMap[opts.randomIndex];}else{if(opts.backwards){opts.nextSlide=opts.startingSlide==0?(els.length-1):opts.startingSlide-1;}else{opts.nextSlide=opts.startingSlide>=(els.length-1)?0:opts.startingSlide+1;}}if(!opts.multiFx){var init=$.fn.cycle.transitions[opts.fx];if($.isFunction(init)){init($cont,$slides,opts);}else{if(opts.fx!="custom"&&!opts.multiFx){log("unknown transition: "+opts.fx,"; slideshow terminating");return false;}}}var e0=$slides[first];if(opts.before.length){opts.before[0].apply(e0,[e0,e0,opts,true]);}if(opts.after.length){opts.after[0].apply(e0,[e0,e0,opts,true]);}if(opts.next){$(opts.next).bind(opts.prevNextEvent,function(){return advance(opts,1);});}if(opts.prev){$(opts.prev).bind(opts.prevNextEvent,function(){return advance(opts,0);});}if(opts.pager||opts.pagerAnchorBuilder){buildPager(els,opts);}exposeAddSlide(opts,els);return opts;}function saveOriginalOpts(opts){opts.original={before:[],after:[]};opts.original.cssBefore=$.extend({},opts.cssBefore);opts.original.cssAfter=$.extend({},opts.cssAfter);opts.original.animIn=$.extend({},opts.animIn);opts.original.animOut=$.extend({},opts.animOut);$.each(opts.before,function(){opts.original.before.push(this);});$.each(opts.after,function(){opts.original.after.push(this);});}function supportMultiTransitions(opts){var i,tx,txs=$.fn.cycle.transitions;if(opts.fx.indexOf(",")>0){opts.multiFx=true;opts.fxs=opts.fx.replace(/\s*/g,"").split(",");for(i=0;i<opts.fxs.length;i++){var fx=opts.fxs[i];tx=txs[fx];if(!tx||!txs.hasOwnProperty(fx)||!$.isFunction(tx)){log("discarding unknown transition: ",fx);opts.fxs.splice(i,1);i--;}}if(!opts.fxs.length){log("No valid transitions named; slideshow terminating.");return false;}}else{if(opts.fx=="all"){opts.multiFx=true;opts.fxs=[];for(p in txs){tx=txs[p];if(txs.hasOwnProperty(p)&&$.isFunction(tx)){opts.fxs.push(p);}}}}if(opts.multiFx&&opts.randomizeEffects){var r1=Math.floor(Math.random()*20)+30;for(i=0;i<r1;i++){var r2=Math.floor(Math.random()*opts.fxs.length);opts.fxs.push(opts.fxs.splice(r2,1)[0]);}debug("randomized fx sequence: ",opts.fxs);}return true;}function exposeAddSlide(opts,els){opts.addSlide=function(newSlide,prepend){var $s=$(newSlide),s=$s[0];if(!opts.autostopCount){opts.countdown++;}els[prepend?"unshift":"push"](s);if(opts.els){opts.els[prepend?"unshift":"push"](s);}opts.slideCount=els.length;$s.css("position","absolute");$s[prepend?"prependTo":"appendTo"](opts.$cont);if(prepend){opts.currSlide++;opts.nextSlide++;}if(!$.support.opacity&&opts.cleartype&&!opts.cleartypeNoBg){clearTypeFix($s);}if(opts.fit&&opts.width){$s.width(opts.width);}if(opts.fit&&opts.height&&opts.height!="auto"){$s.height(opts.height);}s.cycleH=(opts.fit&&opts.height)?opts.height:$s.height();s.cycleW=(opts.fit&&opts.width)?opts.width:$s.width();$s.css(opts.cssBefore);if(opts.pager||opts.pagerAnchorBuilder){$.fn.cycle.createPagerAnchor(els.length-1,s,$(opts.pager),els,opts);}if($.isFunction(opts.onAddSlide)){opts.onAddSlide($s);}else{$s.hide();}};}$.fn.cycle.resetState=function(opts,fx){fx=fx||opts.fx;opts.before=[];opts.after=[];opts.cssBefore=$.extend({},opts.original.cssBefore);opts.cssAfter=$.extend({},opts.original.cssAfter);opts.animIn=$.extend({},opts.original.animIn);opts.animOut=$.extend({},opts.original.animOut);opts.fxFn=null;$.each(opts.original.before,function(){opts.before.push(this);});$.each(opts.original.after,function(){opts.after.push(this);});var init=$.fn.cycle.transitions[fx];if($.isFunction(init)){init(opts.$cont,$(opts.elements),opts);}};function go(els,opts,manual,fwd){if(manual&&opts.busy&&opts.manualTrump){debug("manualTrump in go(), stopping active transition");$(els).stop(true,true);opts.busy=0;}if(opts.busy){debug("transition active, ignoring new tx request");return;}var p=opts.$cont[0],curr=els[opts.currSlide],next=els[opts.nextSlide];if(p.cycleStop!=opts.stopCount||p.cycleTimeout===0&&!manual){return;}if(!manual&&!p.cyclePause&&!opts.bounce&&((opts.autostop&&(--opts.countdown<=0))||(opts.nowrap&&!opts.random&&opts.nextSlide<opts.currSlide))){if(opts.end){opts.end(opts);}return;}var changed=false;if((manual||!p.cyclePause)&&(opts.nextSlide!=opts.currSlide)){changed=true;var fx=opts.fx;curr.cycleH=curr.cycleH||$(curr).height();curr.cycleW=curr.cycleW||$(curr).width();next.cycleH=next.cycleH||$(next).height();next.cycleW=next.cycleW||$(next).width();if(opts.multiFx){if(opts.lastFx==undefined||++opts.lastFx>=opts.fxs.length){opts.lastFx=0;}fx=opts.fxs[opts.lastFx];opts.currFx=fx;}if(opts.oneTimeFx){fx=opts.oneTimeFx;opts.oneTimeFx=null;}$.fn.cycle.resetState(opts,fx);if(opts.before.length){$.each(opts.before,function(i,o){if(p.cycleStop!=opts.stopCount){return;}o.apply(next,[curr,next,opts,fwd]);});}var after=function(){opts.busy=0;$.each(opts.after,function(i,o){if(p.cycleStop!=opts.stopCount){return;}o.apply(next,[curr,next,opts,fwd]);});};debug("tx firing("+fx+"); currSlide: "+opts.currSlide+"; nextSlide: "+opts.nextSlide);opts.busy=1;if(opts.fxFn){opts.fxFn(curr,next,opts,after,fwd,manual&&opts.fastOnEvent);}else{if($.isFunction($.fn.cycle[opts.fx])){$.fn.cycle[opts.fx](curr,next,opts,after,fwd,manual&&opts.fastOnEvent);}else{$.fn.cycle.custom(curr,next,opts,after,fwd,manual&&opts.fastOnEvent);}}}if(changed||opts.nextSlide==opts.currSlide){opts.lastSlide=opts.currSlide;if(opts.random){opts.currSlide=opts.nextSlide;if(++opts.randomIndex==els.length){opts.randomIndex=0;}opts.nextSlide=opts.randomMap[opts.randomIndex];if(opts.nextSlide==opts.currSlide){opts.nextSlide=(opts.currSlide==opts.slideCount-1)?0:opts.currSlide+1;}}else{if(opts.backwards){var roll=(opts.nextSlide-1)<0;if(roll&&opts.bounce){opts.backwards=!opts.backwards;opts.nextSlide=1;opts.currSlide=0;}else{opts.nextSlide=roll?(els.length-1):opts.nextSlide-1;opts.currSlide=roll?0:opts.nextSlide+1;}}else{var roll=(opts.nextSlide+1)==els.length;if(roll&&opts.bounce){opts.backwards=!opts.backwards;opts.nextSlide=els.length-2;opts.currSlide=els.length-1;}else{opts.nextSlide=roll?0:opts.nextSlide+1;opts.currSlide=roll?els.length-1:opts.nextSlide-1;}}}}if(changed&&opts.pager){opts.updateActivePagerLink(opts.pager,opts.currSlide,opts.activePagerClass);}var ms=0;if(opts.timeout&&!opts.continuous){ms=getTimeout(els[opts.currSlide],els[opts.nextSlide],opts,fwd);}else{if(opts.continuous&&p.cyclePause){ms=10;}}if(ms>0){p.cycleTimeout=setTimeout(function(){go(els,opts,0,!opts.backwards);},ms);}}$.fn.cycle.updateActivePagerLink=function(pager,currSlide,clsName){$(pager).each(function(){$(this).children().removeClass(clsName).eq(currSlide).addClass(clsName);});};function getTimeout(curr,next,opts,fwd){if(opts.timeoutFn){var t=opts.timeoutFn.call(curr,curr,next,opts,fwd);while(opts.fx!="none"&&(t-opts.speed)<250){t+=opts.speed;}debug("calculated timeout: "+t+"; speed: "+opts.speed);if(t!==false){return t;}}return opts.timeout;}$.fn.cycle.next=function(opts){advance(opts,1);};$.fn.cycle.prev=function(opts){advance(opts,0);};function advance(opts,moveForward){var val=moveForward?1:-1;var els=opts.elements;var p=opts.$cont[0],timeout=p.cycleTimeout;if(timeout){clearTimeout(timeout);p.cycleTimeout=0;}if(opts.random&&val<0){opts.randomIndex--;if(--opts.randomIndex==-2){opts.randomIndex=els.length-2;}else{if(opts.randomIndex==-1){opts.randomIndex=els.length-1;}}opts.nextSlide=opts.randomMap[opts.randomIndex];}else{if(opts.random){opts.nextSlide=opts.randomMap[opts.randomIndex];}else{opts.nextSlide=opts.currSlide+val;if(opts.nextSlide<0){if(opts.nowrap){return false;}opts.nextSlide=els.length-1;}else{if(opts.nextSlide>=els.length){if(opts.nowrap){return false;}opts.nextSlide=0;}}}}var cb=opts.onPrevNextEvent||opts.prevNextClick;if($.isFunction(cb)){cb(val>0,opts.nextSlide,els[opts.nextSlide]);}go(els,opts,1,moveForward);return false;}function buildPager(els,opts){var $p=$(opts.pager);$.each(els,function(i,o){$.fn.cycle.createPagerAnchor(i,o,$p,els,opts);});opts.updateActivePagerLink(opts.pager,opts.startingSlide,opts.activePagerClass);}$.fn.cycle.createPagerAnchor=function(i,el,$p,els,opts){var a;if($.isFunction(opts.pagerAnchorBuilder)){a=opts.pagerAnchorBuilder(i,el);debug("pagerAnchorBuilder("+i+", el) returned: "+a);}else{a='<a href="#">'+(i+1)+"</a>";}if(!a){return;}var $a=$(a);if($a.parents("body").length===0){var arr=[];if($p.length>1){$p.each(function(){var $clone=$a.clone(true);$(this).append($clone);arr.push($clone[0]);});$a=$(arr);}else{$a.appendTo($p);}}opts.pagerAnchors=opts.pagerAnchors||[];opts.pagerAnchors.push($a);$a.bind(opts.pagerEvent,function(e){e.preventDefault();opts.nextSlide=i;var p=opts.$cont[0],timeout=p.cycleTimeout;if(timeout){clearTimeout(timeout);p.cycleTimeout=0;}var cb=opts.onPagerEvent||opts.pagerClick;if($.isFunction(cb)){cb(opts.nextSlide,els[opts.nextSlide]);}go(els,opts,1,opts.currSlide<i);});if(!/^click/.test(opts.pagerEvent)&&!opts.allowPagerClickBubble){$a.bind("click.cycle",function(){return false;});}if(opts.pauseOnPagerHover){$a.hover(function(){opts.$cont[0].cyclePause++;},function(){opts.$cont[0].cyclePause--;});}};$.fn.cycle.hopsFromLast=function(opts,fwd){var hops,l=opts.lastSlide,c=opts.currSlide;if(fwd){hops=c>l?c-l:opts.slideCount-l;}else{hops=c<l?l-c:l+opts.slideCount-c;}return hops;};function clearTypeFix($slides){debug("applying clearType background-color hack");function hex(s){s=parseInt(s).toString(16);return s.length<2?"0"+s:s;}function getBg(e){for(;e&&e.nodeName.toLowerCase()!="html";e=e.parentNode){var v=$.css(e,"background-color");if(v&&v.indexOf("rgb")>=0){var rgb=v.match(/\d+/g);return"#"+hex(rgb[0])+hex(rgb[1])+hex(rgb[2]);}if(v&&v!="transparent"){return v;}}return"#ffffff";}$slides.each(function(){$(this).css("background-color",getBg(this));});}$.fn.cycle.commonReset=function(curr,next,opts,w,h,rev){$(opts.elements).not(curr).hide();if(typeof opts.cssBefore.opacity=="undefined"){opts.cssBefore.opacity=1;}opts.cssBefore.display="block";if(opts.slideResize&&w!==false&&next.cycleW>0){opts.cssBefore.width=next.cycleW;}if(opts.slideResize&&h!==false&&next.cycleH>0){opts.cssBefore.height=next.cycleH;}opts.cssAfter=opts.cssAfter||{};opts.cssAfter.display="none";$(curr).css("zIndex",opts.slideCount+(rev===true?1:0));$(next).css("zIndex",opts.slideCount+(rev===true?0:1));};$.fn.cycle.custom=function(curr,next,opts,cb,fwd,speedOverride){var $l=$(curr),$n=$(next);var speedIn=opts.speedIn,speedOut=opts.speedOut,easeIn=opts.easeIn,easeOut=opts.easeOut;$n.css(opts.cssBefore);if(speedOverride){if(typeof speedOverride=="number"){speedIn=speedOut=speedOverride;}else{speedIn=speedOut=1;}easeIn=easeOut=null;}var fn=function(){$n.animate(opts.animIn,speedIn,easeIn,function(){cb();});};$l.animate(opts.animOut,speedOut,easeOut,function(){$l.css(opts.cssAfter);if(!opts.sync){fn();}});if(opts.sync){fn();}};$.fn.cycle.transitions={fade:function($cont,$slides,opts){$slides.not(":eq("+opts.currSlide+")").css("opacity",0);opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts);opts.cssBefore.opacity=0;});opts.animIn={opacity:1};opts.animOut={opacity:0};opts.cssBefore={top:0,left:0};}};$.fn.cycle.ver=function(){return ver;};$.fn.cycle.defaults={activePagerClass:"activeSlide",after:null,allowPagerClickBubble:false,animIn:null,animOut:null,autostop:0,autostopCount:0,backwards:false,before:null,cleartype:!$.support.opacity,cleartypeNoBg:false,containerResize:1,continuous:0,cssAfter:null,cssBefore:null,delay:0,easeIn:null,easeOut:null,easing:null,end:null,fastOnEvent:0,fit:0,fx:"fade",fxFn:null,height:"auto",manualTrump:true,next:null,nowrap:0,onPagerEvent:null,onPrevNextEvent:null,pager:null,pagerAnchorBuilder:null,pagerEvent:"click.cycle",pause:0,pauseOnPagerHover:0,prev:null,prevNextEvent:"click.cycle",random:0,randomizeEffects:1,requeueOnImageNotLoaded:true,requeueTimeout:250,rev:0,shuffle:null,slideExpr:null,slideResize:1,speed:1000,speedIn:null,speedOut:null,startingSlide:0,sync:1,timeout:4000,timeoutFn:null,updateActivePagerLink:null};})(jQuery);
+/*
+ * jQuery Cycle Plugin Transition Definitions
+ * This script is a plugin for the jQuery Cycle Plugin
+ * Examples and documentation at: http://malsup.com/jquery/cycle/
+ * Copyright (c) 2007-2010 M. Alsup
+ * Version:	 2.73
+ * Dual licensed under the MIT and GPL licenses:
+ * http://www.opensource.org/licenses/mit-license.php
+ * http://www.gnu.org/licenses/gpl.html
+ */
+(function($){$.fn.cycle.transitions.none=function($cont,$slides,opts){opts.fxFn=function(curr,next,opts,after){$(next).show();$(curr).hide();after();};};$.fn.cycle.transitions.fadeout=function($cont,$slides,opts){$slides.not(":eq("+opts.currSlide+")").css({display:"block",opacity:1});opts.before.push(function(curr,next,opts,w,h,rev){$(curr).css("zIndex",opts.slideCount+(!rev===true?1:0));$(next).css("zIndex",opts.slideCount+(!rev===true?0:1));});opts.animIn.opacity=1;opts.animOut.opacity=0;opts.cssBefore.opacity=1;opts.cssBefore.display="block";opts.cssAfter.zIndex=0;};$.fn.cycle.transitions.scrollUp=function($cont,$slides,opts){$cont.css("overflow","hidden");opts.before.push($.fn.cycle.commonReset);var h=$cont.height();opts.cssBefore.top=h;opts.cssBefore.left=0;opts.cssFirst.top=0;opts.animIn.top=0;opts.animOut.top=-h;};$.fn.cycle.transitions.scrollDown=function($cont,$slides,opts){$cont.css("overflow","hidden");opts.before.push($.fn.cycle.commonReset);var h=$cont.height();opts.cssFirst.top=0;opts.cssBefore.top=-h;opts.cssBefore.left=0;opts.animIn.top=0;opts.animOut.top=h;};$.fn.cycle.transitions.scrollLeft=function($cont,$slides,opts){$cont.css("overflow","hidden");opts.before.push($.fn.cycle.commonReset);var w=$cont.width();opts.cssFirst.left=0;opts.cssBefore.left=w;opts.cssBefore.top=0;opts.animIn.left=0;opts.animOut.left=0-w;};$.fn.cycle.transitions.scrollRight=function($cont,$slides,opts){$cont.css("overflow","hidden");opts.before.push($.fn.cycle.commonReset);var w=$cont.width();opts.cssFirst.left=0;opts.cssBefore.left=-w;opts.cssBefore.top=0;opts.animIn.left=0;opts.animOut.left=w;};$.fn.cycle.transitions.scrollHorz=function($cont,$slides,opts){$cont.css("overflow","hidden").width();opts.before.push(function(curr,next,opts,fwd){if(opts.rev){fwd=!fwd;}$.fn.cycle.commonReset(curr,next,opts);opts.cssBefore.left=fwd?(next.cycleW-1):(1-next.cycleW);opts.animOut.left=fwd?-curr.cycleW:curr.cycleW;});opts.cssFirst.left=0;opts.cssBefore.top=0;opts.animIn.left=0;opts.animOut.top=0;};$.fn.cycle.transitions.scrollVert=function($cont,$slides,opts){$cont.css("overflow","hidden");opts.before.push(function(curr,next,opts,fwd){if(opts.rev){fwd=!fwd;}$.fn.cycle.commonReset(curr,next,opts);opts.cssBefore.top=fwd?(1-next.cycleH):(next.cycleH-1);opts.animOut.top=fwd?curr.cycleH:-curr.cycleH;});opts.cssFirst.top=0;opts.cssBefore.left=0;opts.animIn.top=0;opts.animOut.left=0;};$.fn.cycle.transitions.slideX=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$(opts.elements).not(curr).hide();$.fn.cycle.commonReset(curr,next,opts,false,true);opts.animIn.width=next.cycleW;});opts.cssBefore.left=0;opts.cssBefore.top=0;opts.cssBefore.width=0;opts.animIn.width="show";opts.animOut.width=0;};$.fn.cycle.transitions.slideY=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$(opts.elements).not(curr).hide();$.fn.cycle.commonReset(curr,next,opts,true,false);opts.animIn.height=next.cycleH;});opts.cssBefore.left=0;opts.cssBefore.top=0;opts.cssBefore.height=0;opts.animIn.height="show";opts.animOut.height=0;};$.fn.cycle.transitions.shuffle=function($cont,$slides,opts){var i,w=$cont.css("overflow","visible").width();$slides.css({left:0,top:0});opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,true,true,true);});if(!opts.speedAdjusted){opts.speed=opts.speed/2;opts.speedAdjusted=true;}opts.random=0;opts.shuffle=opts.shuffle||{left:-w,top:15};opts.els=[];for(i=0;i<$slides.length;i++){opts.els.push($slides[i]);}for(i=0;i<opts.currSlide;i++){opts.els.push(opts.els.shift());}opts.fxFn=function(curr,next,opts,cb,fwd){if(opts.rev){fwd=!fwd;}var $el=fwd?$(curr):$(next);$(next).css(opts.cssBefore);var count=opts.slideCount;$el.animate(opts.shuffle,opts.speedIn,opts.easeIn,function(){var hops=$.fn.cycle.hopsFromLast(opts,fwd);for(var k=0;k<hops;k++){fwd?opts.els.push(opts.els.shift()):opts.els.unshift(opts.els.pop());}if(fwd){for(var i=0,len=opts.els.length;i<len;i++){$(opts.els[i]).css("z-index",len-i+count);}}else{var z=$(curr).css("z-index");$el.css("z-index",parseInt(z)+1+count);}$el.animate({left:0,top:0},opts.speedOut,opts.easeOut,function(){$(fwd?this:curr).hide();if(cb){cb();}});});};$.extend(opts.cssBefore,{display:"block",opacity:1,top:0,left:0});};$.fn.cycle.transitions.turnUp=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,true,false);opts.cssBefore.top=next.cycleH;opts.animIn.height=next.cycleH;opts.animOut.width=next.cycleW;});opts.cssFirst.top=0;opts.cssBefore.left=0;opts.cssBefore.height=0;opts.animIn.top=0;opts.animOut.height=0;};$.fn.cycle.transitions.turnDown=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,true,false);opts.animIn.height=next.cycleH;opts.animOut.top=curr.cycleH;});opts.cssFirst.top=0;opts.cssBefore.left=0;opts.cssBefore.top=0;opts.cssBefore.height=0;opts.animOut.height=0;};$.fn.cycle.transitions.turnLeft=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,false,true);opts.cssBefore.left=next.cycleW;opts.animIn.width=next.cycleW;});opts.cssBefore.top=0;opts.cssBefore.width=0;opts.animIn.left=0;opts.animOut.width=0;};$.fn.cycle.transitions.turnRight=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,false,true);opts.animIn.width=next.cycleW;opts.animOut.left=curr.cycleW;});$.extend(opts.cssBefore,{top:0,left:0,width:0});opts.animIn.left=0;opts.animOut.width=0;};$.fn.cycle.transitions.zoom=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,false,false,true);opts.cssBefore.top=next.cycleH/2;opts.cssBefore.left=next.cycleW/2;$.extend(opts.animIn,{top:0,left:0,width:next.cycleW,height:next.cycleH});$.extend(opts.animOut,{width:0,height:0,top:curr.cycleH/2,left:curr.cycleW/2});});opts.cssFirst.top=0;opts.cssFirst.left=0;opts.cssBefore.width=0;opts.cssBefore.height=0;};$.fn.cycle.transitions.fadeZoom=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,false,false);opts.cssBefore.left=next.cycleW/2;opts.cssBefore.top=next.cycleH/2;$.extend(opts.animIn,{top:0,left:0,width:next.cycleW,height:next.cycleH});});opts.cssBefore.width=0;opts.cssBefore.height=0;opts.animOut.opacity=0;};$.fn.cycle.transitions.blindX=function($cont,$slides,opts){var w=$cont.css("overflow","hidden").width();opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts);opts.animIn.width=next.cycleW;opts.animOut.left=curr.cycleW;});opts.cssBefore.left=w;opts.cssBefore.top=0;opts.animIn.left=0;opts.animOut.left=w;};$.fn.cycle.transitions.blindY=function($cont,$slides,opts){var h=$cont.css("overflow","hidden").height();opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts);opts.animIn.height=next.cycleH;opts.animOut.top=curr.cycleH;});opts.cssBefore.top=h;opts.cssBefore.left=0;opts.animIn.top=0;opts.animOut.top=h;};$.fn.cycle.transitions.blindZ=function($cont,$slides,opts){var h=$cont.css("overflow","hidden").height();var w=$cont.width();opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts);opts.animIn.height=next.cycleH;opts.animOut.top=curr.cycleH;});opts.cssBefore.top=h;opts.cssBefore.left=w;opts.animIn.top=0;opts.animIn.left=0;opts.animOut.top=h;opts.animOut.left=w;};$.fn.cycle.transitions.growX=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,false,true);opts.cssBefore.left=this.cycleW/2;opts.animIn.left=0;opts.animIn.width=this.cycleW;opts.animOut.left=0;});opts.cssBefore.top=0;opts.cssBefore.width=0;};$.fn.cycle.transitions.growY=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,true,false);opts.cssBefore.top=this.cycleH/2;opts.animIn.top=0;opts.animIn.height=this.cycleH;opts.animOut.top=0;});opts.cssBefore.height=0;opts.cssBefore.left=0;};$.fn.cycle.transitions.curtainX=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,false,true,true);opts.cssBefore.left=next.cycleW/2;opts.animIn.left=0;opts.animIn.width=this.cycleW;opts.animOut.left=curr.cycleW/2;opts.animOut.width=0;});opts.cssBefore.top=0;opts.cssBefore.width=0;};$.fn.cycle.transitions.curtainY=function($cont,$slides,opts){opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,true,false,true);opts.cssBefore.top=next.cycleH/2;opts.animIn.top=0;opts.animIn.height=next.cycleH;opts.animOut.top=curr.cycleH/2;opts.animOut.height=0;});opts.cssBefore.height=0;opts.cssBefore.left=0;};$.fn.cycle.transitions.cover=function($cont,$slides,opts){var d=opts.direction||"left";var w=$cont.css("overflow","hidden").width();var h=$cont.height();opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts);if(d=="right"){opts.cssBefore.left=-w;}else{if(d=="up"){opts.cssBefore.top=h;}else{if(d=="down"){opts.cssBefore.top=-h;}else{opts.cssBefore.left=w;}}}});opts.animIn.left=0;opts.animIn.top=0;opts.cssBefore.top=0;opts.cssBefore.left=0;};$.fn.cycle.transitions.uncover=function($cont,$slides,opts){var d=opts.direction||"left";var w=$cont.css("overflow","hidden").width();var h=$cont.height();opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,true,true,true);if(d=="right"){opts.animOut.left=w;}else{if(d=="up"){opts.animOut.top=-h;}else{if(d=="down"){opts.animOut.top=h;}else{opts.animOut.left=-w;}}}});opts.animIn.left=0;opts.animIn.top=0;opts.cssBefore.top=0;opts.cssBefore.left=0;};$.fn.cycle.transitions.toss=function($cont,$slides,opts){var w=$cont.css("overflow","visible").width();var h=$cont.height();opts.before.push(function(curr,next,opts){$.fn.cycle.commonReset(curr,next,opts,true,true,true);if(!opts.animOut.left&&!opts.animOut.top){$.extend(opts.animOut,{left:w*2,top:-h/2,opacity:0});}else{opts.animOut.opacity=0;}});opts.cssBefore.left=0;opts.cssBefore.top=0;opts.animIn.left=0;};$.fn.cycle.transitions.wipe=function($cont,$slides,opts){var w=$cont.css("overflow","hidden").width();var h=$cont.height();opts.cssBefore=opts.cssBefore||{};var clip;if(opts.clip){if(/l2r/.test(opts.clip)){clip="rect(0px 0px "+h+"px 0px)";}else{if(/r2l/.test(opts.clip)){clip="rect(0px "+w+"px "+h+"px "+w+"px)";}else{if(/t2b/.test(opts.clip)){clip="rect(0px "+w+"px 0px 0px)";}else{if(/b2t/.test(opts.clip)){clip="rect("+h+"px "+w+"px "+h+"px 0px)";}else{if(/zoom/.test(opts.clip)){var top=parseInt(h/2);var left=parseInt(w/2);clip="rect("+top+"px "+left+"px "+top+"px "+left+"px)";}}}}}}opts.cssBefore.clip=opts.cssBefore.clip||clip||"rect(0px 0px 0px 0px)";var d=opts.cssBefore.clip.match(/(\d+)/g);var t=parseInt(d[0]),r=parseInt(d[1]),b=parseInt(d[2]),l=parseInt(d[3]);opts.before.push(function(curr,next,opts){if(curr==next){return;}var $curr=$(curr),$next=$(next);$.fn.cycle.commonReset(curr,next,opts,true,true,false);opts.cssAfter.display="block";var step=1,count=parseInt((opts.speedIn/13))-1;(function f(){var tt=t?t-parseInt(step*(t/count)):0;var ll=l?l-parseInt(step*(l/count)):0;var bb=b<h?b+parseInt(step*((h-b)/count||1)):h;var rr=r<w?r+parseInt(step*((w-r)/count||1)):w;$next.css({clip:"rect("+tt+"px "+rr+"px "+bb+"px "+ll+"px)"});(step++<=count)?setTimeout(f,13):$curr.css("display","none");})();});$.extend(opts.cssBefore,{display:"block",opacity:1,top:0,left:0});opts.animIn={left:0};opts.animOut={left:0};};})(jQuery);;

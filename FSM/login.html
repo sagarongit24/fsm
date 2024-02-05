@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login page</title>
+    <link rel="stylesheet" type="text/css" href="login.css">
+</head>
+<body>
+    <div class="container vh-100">
+        <div class="row justify-content-center h-100">
+            <div class="card w-25 my-auto shadow">
+                <div class="card-header text-center bg-primary text-white">
+                    <h2>Login form</h2>
+                </div>
+                <div class="card-body">
+                    <form action="login.php" method="post">
+                        <div class="form-group">
+                            <label for="email">E-mail</label><br>
+                            <input type="email" id="email" class="form-control" name="email" autocomplete="off"><br>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password</label><br>
+                            <input type="password" id="password" class="form-control" name="password" autocomplete="on">
+                        </div>
+                        <input type="submit" class="btn btn-primary w-100" value="Login" name="">
+                    </form>
+                </div>
+                <div id="foot" class="card-footer text-right">
+                    <small>&copy; Sagar MS</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

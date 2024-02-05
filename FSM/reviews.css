@@ -1,0 +1,77 @@
+/* Reset some default browser styles */
+body, h2, table, th, td, form, label, input, a.button {
+    margin: 0;
+    padding: 0;
+}
+
+/* Set the background image and define its properties */
+body {
+    background-image: url('whale.jpg'); /* Replace with your background image */
+    background-size: cover; /* Cover the entire viewport */
+    background-attachment: fixed; /* Fix the background image position */
+    background-repeat: no-repeat;
+    font-family: 'Mr. Ean', cursive, sans-serif; /* Use Mr. Ean font */
+    color: #333; /* Text color */
+}
+
+/* Style the heading */
+h2 {
+    background-color: #0099cc; /* Subtle blue background color */
+    color: #fff; /* Text color */
+    padding: 10px;
+    text-align: center;
+    text-shadow: 2px 2px 4px #000; /* Add a subtle text shadow */
+}
+
+/* Style the table */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #ccc;
+    background-color: rgba(255, 255, 255, 0.9); /* Semi-transparent white background */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); /* Add a subtle shadow */
+}
+
+th, td {
+    border: 1px solid #ccc;
+    padding: 10px;
+    text-align: left;
+}
+
+th {
+    background-color: #0099cc; /* Blue header background color */
+    color: #fff; /* Text color */
+}
+
+/* Style form labels and input fields */
+label {
+    display: block;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+input[type="text"],
+input[type="date"],
+input[type="number"] {
+    width: 97%;
+    padding: 10px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+/* Style the "Add New Review" button */
+a.button {
+    display: inline-block;
+    margin-top: 10px;
+    background-color: #0099cc; /* Blue background color */
+    color: #fff; /* Text color */
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    text-decoration: none;
+}
+
+a.button:hover {
+    background-color: #0077b3; /* Darker blue on hover */
+}

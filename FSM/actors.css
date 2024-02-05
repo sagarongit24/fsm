@@ -1,0 +1,71 @@
+/* Reset some default browser styles */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background-color: #F0F4F7; /* Light blue background */
+    color: #333;
+}
+
+/* Header styles with background image */
+h1 {
+    background-image: url('your-header-image.jpg'); /* Replace with your header image URL */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    color: #fff;
+    text-align: center;
+    padding: 100px 0;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Table styles */
+table {
+    margin: 20px auto;
+    width: 80%;
+    background: linear-gradient(to bottom, #FFF, #F0F4F7); /* Gradient background */
+    border-radius: 10px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    border-collapse: collapse;
+}
+
+table th, table td {
+    padding: 15px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+table th {
+    background-color: #2196F3; /* Blue header background */
+    color: #fff;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+/* Alternate row styles for better readability */
+table tr:nth-child(even) {
+    background-color: #ECEFF1; /* Light blue alternate row */
+}
+
+/* Link styles */
+a {
+    display: inline-block;
+    margin: 10px 20px;
+    padding: 10px 20px;
+    background-color: #FF9800; /* Orange */
+    color: #fff;
+    text-decoration: none;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+a:hover {
+    background-color: #FF5722; /* Darker Orange on hover */
+}

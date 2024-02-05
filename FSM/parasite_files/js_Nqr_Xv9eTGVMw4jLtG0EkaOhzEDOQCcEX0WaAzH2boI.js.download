@@ -1,0 +1,553 @@
+/*jslint browser: true */ /*global jQuery: true */
+
+/**
+ * jQuery Cookie plugin
+ *
+ * Copyright (c) 2010 Klaus Hartl (stilbuero.de)
+ * Dual licensed under the MIT and GPL licenses:
+ * http://www.opensource.org/licenses/mit-license.php
+ * http://www.gnu.org/licenses/gpl.html
+ *
+ */
+
+// TODO JsDoc
+
+/**
+ * Create a cookie with the given key and value and other optional parameters.
+ *
+ * @example $.cookie('the_cookie', 'the_value');
+ * @desc Set the value of a cookie.
+ * @example $.cookie('the_cookie', 'the_value', { expires: 7, path: '/', domain: 'jquery.com', secure: true });
+ * @desc Create a cookie with all available options.
+ * @example $.cookie('the_cookie', 'the_value');
+ * @desc Create a session cookie.
+ * @example $.cookie('the_cookie', null);
+ * @desc Delete a cookie by passing null as value. Keep in mind that you have to use the same path and domain
+ *       used when the cookie was set.
+ *
+ * @param String key The key of the cookie.
+ * @param String value The value of the cookie.
+ * @param Object options An object literal containing key/value pairs to provide optional cookie attributes.
+ * @option Number|Date expires Either an integer specifying the expiration date from now on in days or a Date object.
+ *                             If a negative value is specified (e.g. a date in the past), the cookie will be deleted.
+ *                             If set to null or omitted, the cookie will be a session cookie and will not be retained
+ *                             when the the browser exits.
+ * @option String path The value of the path atribute of the cookie (default: path of page that created the cookie).
+ * @option String domain The value of the domain attribute of the cookie (default: domain of page that created the cookie).
+ * @option Boolean secure If true, the secure attribute of the cookie will be set and the cookie transmission will
+ *                        require a secure protocol (like HTTPS).
+ * @type undefined
+ *
+ * @name $.cookie
+ * @cat Plugins/Cookie
+ * @author Klaus Hartl/klaus.hartl@stilbuero.de
+ */
+
+/**
+ * Get the value of a cookie with the given key.
+ *
+ * @example $.cookie('the_cookie');
+ * @desc Get the value of a cookie.
+ *
+ * @param String key The key of the cookie.
+ * @return The value of the cookie.
+ * @type String
+ *
+ * @name $.cookie
+ * @cat Plugins/Cookie
+ * @author Klaus Hartl/klaus.hartl@stilbuero.de
+ */
+jQuery.cookie = function (key, value, options) {
+
+    // key and value given, set cookie...
+    if (arguments.length > 1 && (value === null || typeof value !== "object")) {
+        options = jQuery.extend({}, options);
+
+        if (value === null) {
+            options.expires = -1;
+        }
+
+        if (typeof options.expires === 'number') {
+            var days = options.expires, t = options.expires = new Date();
+            t.setDate(t.getDate() + days);
+        }
+
+        return (document.cookie = [
+            encodeURIComponent(key), '=',
+            options.raw ? String(value) : encodeURIComponent(String(value)),
+            options.expires ? '; expires=' + options.expires.toUTCString() : '', // use expires attribute, max-age is not supported by IE
+            options.path ? '; path=' + options.path : '',
+            options.domain ? '; domain=' + options.domain : '',
+            options.secure ? '; secure' : ''
+        ].join(''));
+    }
+
+    // key and possibly options given, get cookie...
+    options = value || {};
+    var result, decode = options.raw ? function (s) { return s; } : decodeURIComponent;
+    return (result = new RegExp('(?:^|; )' + encodeURIComponent(key) + '=([^;]*)').exec(document.cookie)) ? decode(result[1]) : null;
+};
+;
+(function ($) {
+
+Drupal.WeebPal = Drupal.WeebPal || {};
+Drupal.WeebPal.onClickResetDefaultSettings = function() {
+  var answer = confirm(Drupal.t('Are you sure you want to reset your theme settings to default theme settings?'))
+  if (answer){
+    $("input:hidden[name = magazine_use_default_settings]").attr("value", 1);
+    return true;
+  }
+
+  return false;
+}
+
+Drupal.behaviors.actionWeebPal = {
+  attach: function (context) {
+	$(".change-skin-button").click(function() {
+	  parts = this.href.split("/");
+	  style = parts[parts.length - 1];
+   	  $.cookie("magazine_skin", style, {path: '/'});
+      window.location.reload();
+	  return false;
+    });
+    $("#change_skin_menu_wrapper").mouseenter(function() {
+      $('#change_skin_menu_wrapper').stop(true, false).animate({left: 0}, 1000);	  
+    }).mouseleave(function() {
+      $('#change_skin_menu_wrapper').stop(true, false).animate({left: -61}, 1000);
+    });	
+  }
+};
+})(jQuery);
+;
+(function($) {
+
+var version = '@VERSION',
+    defaults = {
+      exclude: [],
+      excludeWithin:[],
+      offset: 0,
+      direction: 'top', // one of 'top' or 'left'
+      scrollElement: null, // jQuery set of elements you wish to scroll (for $.smoothScroll).
+                          //  if null (default), $('html, body').firstScrollable() is used.
+      scrollTarget: null, // only use if you want to override default behavior
+      beforeScroll: function() {},  // fn(opts) function to be called before scrolling occurs. "this" is the element(s) being scrolled
+      afterScroll: function() {},   // fn(opts) function to be called after scrolling occurs. "this" is the triggering element
+      easing: 'swing',
+      speed: 400,
+      autoCoefficent: 2 // coefficient for "auto" speed
+    },
+
+    getScrollable = function(opts) {
+      var scrollable = [],
+          scrolled = false,
+          dir = opts.dir && opts.dir == 'left' ? 'scrollLeft' : 'scrollTop';
+
+      this.each(function() {
+
+        if (this == document || this == window) { return; }
+        var el = $(this);
+        if ( el[dir]() > 0 ) {
+          scrollable.push(this);
+        } else {
+          // if scroll(Top|Left) === 0, nudge the element 1px and see if it moves
+          el[dir](1);
+          scrolled = el[dir]() > 0;
+          if ( scrolled ) {
+            scrollable.push(this);
+          }
+          // then put it back, of course
+          el[dir](0);
+        }
+      });
+
+      // If no scrollable elements, fall back to <body>,
+      // if it's in the jQuery collection
+      // (doing this because Safari sets scrollTop async,
+      // so can't set it to 1 and immediately get the value.)
+      if (!scrollable.length) {
+        this.each(function(index) {
+          if (this.nodeName === 'BODY') {
+            scrollable = [this];
+          }
+        });
+      }
+
+      // Use the first scrollable element if we're calling firstScrollable()
+      if ( opts.el === 'first' && scrollable.length > 1 ) {
+        scrollable = [ scrollable[0] ];
+      }
+
+      return scrollable;
+    },
+    isTouch = 'ontouchend' in document;
+
+$.fn.extend({
+  scrollable: function(dir) {
+    var scrl = getScrollable.call(this, {dir: dir});
+    return this.pushStack(scrl);
+  },
+  firstScrollable: function(dir) {
+    var scrl = getScrollable.call(this, {el: 'first', dir: dir});
+    return this.pushStack(scrl);
+  },
+
+  smoothScroll: function(options) {
+    options = options || {};
+    var opts = $.extend({}, $.fn.smoothScroll.defaults, options),
+        locationPath = $.smoothScroll.filterPath(location.pathname);
+
+    this
+    .unbind('click.smoothscroll')
+    .bind('click.smoothscroll', function(event) {
+      var link = this,
+          $link = $(this),
+          exclude = opts.exclude,
+          excludeWithin = opts.excludeWithin,
+          elCounter = 0, ewlCounter = 0,
+          include = true,
+          clickOpts = {},
+          hostMatch = ((location.hostname === link.hostname) || !link.hostname),
+          pathMatch = opts.scrollTarget || ( $.smoothScroll.filterPath(link.pathname) || locationPath ) === locationPath,
+          thisHash = escapeSelector(link.hash);
+
+      if ( !opts.scrollTarget && (!hostMatch || !pathMatch || !thisHash) ) {
+        include = false;
+      } else {
+        while (include && elCounter < exclude.length) {
+          if ($link.is(escapeSelector(exclude[elCounter++]))) {
+            include = false;
+          }
+        }
+        while ( include && ewlCounter < excludeWithin.length ) {
+          if ($link.closest(excludeWithin[ewlCounter++]).length) {
+            include = false;
+          }
+        }
+      }
+
+      if ( include ) {
+        event.preventDefault();
+
+        $.extend( clickOpts, opts, {
+          scrollTarget: opts.scrollTarget || thisHash,
+          link: link
+        });
+
+        $.smoothScroll( clickOpts );
+      }
+    });
+
+    return this;
+  }
+});
+
+$.smoothScroll = function(options, px) {
+  var opts, $scroller, scrollTargetOffset, speed,
+      scrollerOffset = 0,
+      offPos = 'offset',
+      scrollDir = 'scrollTop',
+      aniProps = {},
+      aniOpts = {},
+      scrollprops = [];
+
+
+  if (typeof options === 'number') {
+    opts = $.fn.smoothScroll.defaults;
+    scrollTargetOffset = options;
+  } else {
+    opts = $.extend({}, $.fn.smoothScroll.defaults, options || {});
+    if (opts.scrollElement) {
+      offPos = 'position';
+      if (opts.scrollElement.css('position') == 'static') {
+        opts.scrollElement.css('position', 'relative');
+      }
+    }
+  }
+
+  opts = $.extend({link: null}, opts);
+  scrollDir = opts.direction == 'left' ? 'scrollLeft' : scrollDir;
+
+  if ( opts.scrollElement ) {
+    $scroller = opts.scrollElement;
+    scrollerOffset = $scroller[scrollDir]();
+  } else {
+    $scroller = $('html, body').firstScrollable();
+  }
+
+  // beforeScroll callback function must fire before calculating offset
+  opts.beforeScroll.call($scroller, opts);
+
+  scrollTargetOffset = (typeof options === 'number') ? options :
+                        px ||
+                        ( $(opts.scrollTarget)[offPos]() &&
+                        $(opts.scrollTarget)[offPos]()[opts.direction] ) ||
+                        0;
+
+  aniProps[scrollDir] = scrollTargetOffset + scrollerOffset + opts.offset;
+  speed = opts.speed;
+
+  // automatically calculate the speed of the scroll based on distance / coefficient
+  if (speed === 'auto') {
+
+    // if aniProps[scrollDir] == 0 then we'll use scrollTop() value instead
+    speed = aniProps[scrollDir] || $scroller.scrollTop();
+
+    // divide the speed by the coefficient
+    speed = speed / opts.autoCoefficent;
+  }
+
+  aniOpts = {
+    duration: speed,
+    easing: opts.easing,
+    complete: function() {
+      opts.afterScroll.call(opts.link, opts);
+    }
+  };
+
+  if (opts.step) {
+    aniOpts.step = opts.step;
+  }
+
+  if ($scroller.length) {
+    $scroller.stop().animate(aniProps, aniOpts);
+  } else {
+    opts.afterScroll.call(opts.link, opts);
+  }
+};
+
+$.smoothScroll.version = version;
+$.smoothScroll.filterPath = function(string) {
+  return string
+    .replace(/^\//,'')
+    .replace(/(index|default).[a-zA-Z]{3,4}$/,'')
+    .replace(/\/$/,'');
+};
+
+// default options
+$.fn.smoothScroll.defaults = defaults;
+
+function escapeSelector (str) {
+  return str.replace(/(:|\.)/g,'\\$1');
+}
+
+})(jQuery);
+;
+(function ($) {
+Drupal.behaviors.garnetAction = {
+  attach: function (context) {
+    Drupal.Magazine.setInputPlaceHolder('search_block_form', Drupal.t('Search...'));
+    $('.btn-btt').smoothScroll({offset:0, speed: 200});
+    
+    Drupal.Magazine.initUserMenu();
+
+
+    $(window).load(function() {
+      window.setTimeout(function() {
+        // Drupal.Magazine.equalHeight( $('#quicktabs-tabpage-quicktab-0 .views-field-title') );
+        // Drupal.Magazine.equalHeight( $('#quicktabs-tabpage-quicktab-0 .views-field-body') );
+
+        Drupal.Magazine.equalHeight( $('#quicktabs-container-quicktab .views-field-title') );
+        Drupal.Magazine.equalHeight( $('#quicktabs-container-quicktab .view-field-body') );
+
+
+        // Drupal.Magazine.equalHeight( $('#quicktabs-tabpage-quicktab-1 .views-field-title') );
+        // Drupal.Magazine.equalHeight( $('#quicktabs-tabpage-quicktab-1 .views-field-body') );
+        // Drupal.Magazine.equalHeight( $('#panel-third-wrapper .panel-column .grid-inner') );
+      }, 100);
+    }).scroll(function() {
+      Drupal.Magazine.checkScroll();
+    }).resize(function(){
+      Drupal.Magazine.checkScroll();
+    });
+
+    // Drupal.Magazine.initQuickTab();
+  }
+}
+
+Drupal.Magazine = Drupal.Magazine || {};
+Drupal.Magazine.FIXED_MENU_POSITION = 150;
+
+Drupal.Magazine.setInputPlaceHolder = function(name, text) {
+  $('input[name="' + name + '"]').val(Drupal.t(text));
+  $('input[name="' + name + '"]').focus(function(){
+    if(this.value == Drupal.t(text)) {
+      this.value='';
+    }
+  }).blur(function(){
+    if(this.value == '') {
+      this.value=Drupal.t(text);
+    }
+  });
+}
+
+Drupal.Magazine.initQuickTab = function() {
+  $('#quicktabs-quicktab ul.quicktabs-tabs li a').click(function() {
+    var self = $(this);
+    if (self.hasClass('processed')) return;
+    var id = self.attr('id').substr(-1);
+    if (id == 0) return;
+
+    Drupal.Magazine.equalHeight( $('#quicktabs-tabpage-quicktab-'+id+' .views-field-title') );
+    Drupal.Magazine.equalHeight( $('#quicktabs-tabpage-quicktab-'+id+' .views-field-body') );
+
+    self.addClass('processed');
+  })
+}
+
+Drupal.Magazine.checkScroll = function() {
+  // if (Drupal.settings.garnet.show_fixed_menu == undefined || Drupal.settings.garnet.show_fixed_menu == false) return;
+  // var wrapper = $('#main-menu-wrapper');
+  // if ($(window).scrollTop() > this.FIXED_MENU_POSITION) {
+  //   var $page = $('#page');
+  //   wrapper.css({top: $page.position().top});
+  //   wrapper.addClass('fixed-menu');
+  //   wrapper.find('#fixedLogo').show();
+  // } else {
+  //   wrapper.css({top: 'auto'});
+  //   wrapper.removeClass('fixed-menu');
+  //   wrapper.find('#fixedLogo').hide();
+  // }
+  
+  if($(window).scrollTop() > 100) {
+    $('.btn-btt').show();
+  }
+  else {
+    $('.btn-btt').hide();
+  }
+}
+  
+Drupal.Magazine.equalHeight = function(elements) {
+  highest = 0;
+  elements.each(function() {
+    if($(this).outerHeight() > highest) {
+      highest = $(this).outerHeight();
+    }
+  });
+  return elements.each(function() {
+    padding = $(this).innerHeight() - $(this).height();
+    extra = padding + ($(this).outerHeight() - $(this).innerHeight());
+    if(($.browser.msie && $.browser.version == 6.0)) {
+      $(this).css({'height': highest - extra, 'overflow': 'hidden'});
+    }
+    else {
+      $(this).css({'min-height': highest - extra});
+    }
+  });
+}
+
+Drupal.Magazine.initUserMenu = function() {
+  
+  
+    $('i.wp-icon-user-login').click(function() {
+      $('#wp-user-wrapper').toggle();
+    })  
+  
+}
+  
+})(jQuery);;
+(function ($) {
+  Drupal.Responsive = Drupal.Responsive || {};
+  //Drupal.Responsive.screens = [0.5, 479.5, 768.5, 979.5, 1049.5];
+  Drupal.Responsive.mobileMaxWidth = 479.5;
+  Drupal.Responsive.IE8 = $.browser.msie && parseInt($.browser.version, 10) === 8;
+  Drupal.Responsive.toolbar = false;
+  
+  Drupal.behaviors.actionResponsive = {
+    attach: function (context) {
+      $(window).load(function() {
+        Drupal.Responsive.toolbar = $('#toolbar').length ? $("#toolbar") : false;
+        Drupal.Responsive.initResponsiveMenu();
+        Drupal.Responsive.setSlideshowHeight();
+        $(window).resize(function(){
+          $('body').css({'padding-top': Drupal.Responsive.toolbar ? (Drupal.Responsive.toolbar.height() - (Drupal.Responsive.IE8 ? 10 : 0)) : 0});
+          Drupal.Responsive.updateResponsiveMenu();
+          Drupal.Responsive.setSlideshowHeight();
+        });
+        // el = $('body.garnet-popup-iframe #block-system-main .block-inner');
+        // if(el.length && !Drupal.Responsive.IE8) {
+        //   el.css({height: $(window).height()});
+        //   Drupal.Responsive.popupIScroll = new iScroll(el[0], {vScroll: true, hScroll: false, vScrollbar: true, hScrollbar: false, scrollbarClass: 'myScrollbar', useTransform: false});
+        // }
+      });
+    }
+  };
+  
+  Drupal.Responsive.updateResponsiveMenu = function() {
+    if($('#main-menu-wrapper .tb-megamenu-button').length == 0) {
+        var target = $('.responsive-menu-button');
+        if (target.css('display') == 'none') {
+          $('#main-menu-wrapper .region-main-menu').show();
+        } 
+        else {
+          $('#main-menu-wrapper .region-main-menu').hide();
+        }
+    }
+    if ($('#sports-menu-wrapper .tb-megamenu-button').length == 0) {
+      var target = $('.responsive-sport-menu-button');
+      if (target.css('display') == 'none') {
+        $('#sports-menu-wrapper .region-sports-menu').show();
+      } 
+      else {
+        $('#sports-menu-wrapper .region-sports-menu').hide();
+      }
+    }
+
+  }
+
+  Drupal.Responsive.initResponsiveMenu = function() {
+    $('.responsive-menu-button').bind('click',function(e){
+      var target = $('#main-menu-wrapper .region-main-menu');
+      if (target.css('display') == 'none') {
+        target.css({display: 'block'});
+      }
+      else {
+        target.css({display: 'none'});
+      }
+    });
+    $('.responsive-sport-menu-button').click(function(e) {
+      var target = $('#sports-menu-wrapper .region-sports-menu');
+      if (target.css('display') == 'none') {
+        target.css('display', 'block');
+      }
+      else {
+        target.css('display', 'none');
+      }
+    })
+    Drupal.Responsive.updateResponsiveMenu();
+  }
+
+  Drupal.Responsive.setSlideshowHeight = function() {
+    var imgs = $('#block-views-slideshow-block .view .views-field img')
+    if (imgs.length) {
+
+      var minImageHeight = imgs.get(0).height;
+      imgs.each(function(idx, el) {
+        if (minImageHeight > el.height) {
+          minImageHeight = el.height;
+        }
+      })
+
+      $('.views_slideshow_cycle_main .views-slideshow-cycle-main-frame').css('height', minImageHeight);
+      $('.views_slideshow_cycle_main .views-slideshow-cycle-main-frame-row').css('height', minImageHeight);
+      
+      Drupal.viewsSlideshowCycle.load("#views_slideshow_cycle_main_slideshow-block");
+
+    }
+  }
+
+
+})(jQuery);
+;
+/*!
+ * jQuery lockfixed plugin
+ * http://www.directlyrics.com/code/lockfixed/
+ *
+ * Copyright 2012-2015 Yvo Schaap
+ * Released under the MIT license
+ * http://www.directlyrics.com/code/lockfixed/license.txt
+ *
+ * Date: Wed April 1 2015 12:00:01 GMT
+ */
+(function(d,p){d.extend({lockfixed:function(a,b){b&&b.offset?(b.offset.bottom=parseInt(b.offset.bottom,10),b.offset.top=parseInt(b.offset.top,10)):b.offset={bottom:100,top:0};if((a=d(a))&&a.offset()){var n=a.css("position"),e=parseInt(a.css("marginTop"),10)||0,l=a.css("top"),h=a.offset().top,f=!1;if(!0===b.forcemargin||navigator.userAgent.match(/\bMSIE (4|5|6)\./)||navigator.userAgent.match(/\bOS ([0-9])_/)||navigator.userAgent.match(/\bAndroid ([0-9])\./i))f=!0;a.wrap("<div style='height:"+a.outerHeight()+
+"px;display:"+a.css("display")+"'></div>");d(window).bind("DOMContentLoaded load scroll resize orientationchange lockfixed:pageupdate",a,function(k){if(!f||!document.activeElement||"INPUT"!==document.activeElement.nodeName){var c=0,c=a.outerHeight();k=a.outerWidth();var m=d(document).height()-b.offset.bottom,g=d(window).scrollTop();"fixed"===a.css("position")||f||(h=a.offset().top,l=a.css("top"));g>=h-(e?e:0)-b.offset.top?(c=m<g+c+e+b.offset.top&&c+b.offset.top>d(window).height()?g+c+e+b.offset.top-
+m:0,f?a.css({marginTop:parseInt(g-h-c,10)+2*b.offset.top+"px"}):a.css({position:"fixed",top:b.offset.top-c+"px",width:k+"px"})):a.css({position:n,top:l,width:k+"px",marginTop:(e&&!f?e:0)+"px"})}})}}})})(jQuery);;
