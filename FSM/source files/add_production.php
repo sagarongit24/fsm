@@ -8,7 +8,6 @@
     <h1>Add New Production</h1>
     <form action="insert_production.php" method="post">
 
-        <!-- You can add input fields for adding a new production here -->
         <label for="production_name">Production Name:</label>
         <input type="text" id="production_name" name="production_name" required><br>
 
