@@ -7,16 +7,14 @@
     <h1>Edit Actor</h1>
 
     <?php
-    // Database connection settings
+
     $db_host = "localhost";
     $db_username = "root";
     $db_password = "";
     $db_name = "film_studio";
 
-    // Create a database connection
     $conn = new mysqli($db_host, $db_username, $db_password, $db_name);
 
-    // Check the database connection
     if ($conn->connect_error) {
         die("Connection failed: " . $conn->connect_error);
     }
@@ -24,15 +22,13 @@
     if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET["id"])) {
         $actor_id = $_GET["id"];
 
-        // Query to retrieve actor data based on actor_id
         $sql = "SELECT * FROM actors WHERE actor_id = $actor_id";
 
-        // Execute the query
         $result = $conn->query($sql);
 
         if ($result->num_rows == 1) {
             $row = $result->fetch_assoc();
-            // Display a form to edit actor details, pre-filled with current values
+
             echo "<form method='POST' action='update_actor.php'>
                 <input type='hidden' name='actor_id' value='" . $row["actor_id"] . "'>
                 <label for='actor_name'>Actor Name:</label>
@@ -52,7 +48,6 @@
         echo "Invalid request.";
     }
 
-    // Close the database connection
     $conn->close();
     ?>
 
