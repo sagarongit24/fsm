@@ -8,30 +8,26 @@
     <h1>Add New Director</h1>
 
     <?php
-    // Database connection settings
+
     $db_host = "localhost";
     $db_username = "root";
     $db_password = "";
     $db_name = "film_studio";
 
-    // Check if the form is submitted
     if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // Create a database connection
         $conn = new mysqli($db_host, $db_username, $db_password, $db_name);
 
-        // Check the database connection
         if ($conn->connect_error) {
             die("Connection failed: " . $conn->connect_error);
         }
 
-        // Retrieve data from the form
         $director_name = $_POST["new_director_name"];
         $birth_date = $_POST["new_birth_date"];
         $award = $_POST["new_award"];
         $website = $_POST["new_website"];
         $social_media_id = $_POST["new_social_media_id"];
 
-        // Insert the data into the directors table
         $sql = "INSERT INTO directors (director_name, birth_date, award, website, social_media_id)
                 VALUES ('$director_name', '$birth_date', '$award', '$website', '$social_media_id')";
 
@@ -41,12 +37,10 @@
             echo "Error: " . $sql . "<br>" . $conn->error;
         }
 
-        // Close the database connection
         $conn->close();
     }
     ?>
 
-    <!-- Director Input Form -->
     <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
         <label for="new_director_name">Director Name:</label>
         <input type="text" id="new_director_name" name="new_director_name"><br>
