@@ -8,28 +8,24 @@
     <h1>List of Actors</h1>
 
     <?php
-    // Database connection settings
+
     $db_host = "localhost";
     $db_username = "root";
     $db_password = "";
     $db_name = "film_studio";
 
-    // Create a database connection
     $conn = new mysqli($db_host, $db_username, $db_password, $db_name);
 
-    // Check the database connection
     if ($conn->connect_error) {
         die("Connection failed: " . $conn->connect_error);
     }
 
-    // Query to retrieve actor data
     $sql = "SELECT * FROM actors";
 
-    // Execute the query
     $result = $conn->query($sql);
 
     if ($result->num_rows > 0) {
-        // Output data of each row
+
         echo "<table border='1'>
         <tr>
             <th>Actor ID</th>
@@ -59,7 +55,6 @@
         echo "No actors found.";
     }
 
-    // Close the database connection
     $conn->close();
     ?>
 
