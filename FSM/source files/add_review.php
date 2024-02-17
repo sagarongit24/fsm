@@ -1,15 +1,12 @@
 <?php
-// Include your database connection code
-include_once "conn.php"; // Replace with your actual connection code
+include_once "conn.php"; 
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Retrieve data from the form
     $film_id = $_POST['film_id'];
     $reviewer_name = $_POST['reviewer_name'];
     $review_content = $_POST['review_content'];
     $rating = $_POST['rating'];
 
-    // Insert the review into the database
     $sql = "INSERT INTO reviews (film_id, reviewer_name, review_text, rating) VALUES (?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("isss", $film_id, $reviewer_name, $review_content, $rating);
