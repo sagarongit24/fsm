@@ -8,45 +8,39 @@
     <h1>Add Actor</h1>
 
     <?php
-    // Check if the form was submitted
+
     if ($_SERVER["REQUEST_METHOD"] == "POST") {
-        // Process the form data and insert a new actor into the database
+
         $actor_name = $_POST["actor_name"];
         $birth_date = $_POST["birth_date"];
         $agent_name = $_POST["agent_name"];
         $current_project = $_POST["current_project"];
 
-        // Database connection settings
         $db_host = "localhost";
         $db_username = "root";
         $db_password = "";
         $db_name = "film_studio";
 
-        // Create a database connection
         $conn = new mysqli($db_host, $db_username, $db_password, $db_name);
 
-        // Check the database connection
         if ($conn->connect_error) {
             die("Connection failed: " . $conn->connect_error);
         }
 
-        // Query to insert a new actor into the actors table
         $sql = "INSERT INTO actors (actor_name, birth_date, agent_name, current_project) VALUES ('$actor_name', '$birth_date', '$agent_name', '$current_project')";
 
         if ($conn->query($sql) === TRUE) {
             echo "Actor added successfully.";
-            // Redirect to actors.php after 2 seconds
+
             header("refresh:2;url=actors.php");
         } else {
             echo "Error: " . $sql . "<br>" . $conn->error;
         }
 
-        // Close the database connection
         $conn->close();
     }
     ?>
 
-    <!-- Form to add a new actor -->
     <form method="POST" action="<?php echo $_SERVER['PHP_SELF']; ?>">
         <label for="actor_name">Actor Name:</label>
         <input type="text" id="actor_name" name="actor_name" required><br>
