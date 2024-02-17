@@ -10,29 +10,24 @@
     if (isset($_GET["id"])) {
         $crew_id = $_GET["id"];
 
-        // Database connection settings
         $db_host = "localhost";
         $db_username = "root";
         $db_password = "";
         $db_name = "film_studio";
 
-        // Create a database connection
         $conn = new mysqli($db_host, $db_username, $db_password, $db_name);
 
-        // Check the database connection
         if ($conn->connect_error) {
             die("Connection failed: " . $conn->connect_error);
         }
 
-        // Query to retrieve crew member data by ID
         $sql = "SELECT * FROM crew WHERE crew_id = $crew_id";
 
-        // Execute the query
         $result = $conn->query($sql);
 
         if ($result->num_rows == 1) {
             $row = $result->fetch_assoc();
-            // Display crew member details and a link to update
+
             echo "<form method='POST' action='update_crew.php'>
                 <input type='hidden' name='crew_id' value='" . $row["crew_id"] . "'>
                 <label for='crew_name'>Crew Name:</label>
@@ -49,7 +44,6 @@
             echo "Crew member not found.";
         }
 
-        // Close the database connection
         $conn->close();
     } else {
         echo "Invalid request.";
